@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Otsu Obliterator Build Script
-# Follows bash best practices and Go project conventions
+# Implements Go project conventions and provides build automation
 
 set -o errexit    # Exit on any command failure
 set -o nounset    # Exit on undefined variables
@@ -55,9 +55,8 @@ show_help() {
     cat << 'EOF'
 Otsu Obliterator Build System
 
-CRITICAL: This script uses 'go build' instead of 'fyne build' to preserve 
-proper main() entry points. This ensures menu initialization and About 
-dialog functionality work correctly.
+Uses 'go build' instead of 'fyne build' to preserve main() entry points.
+This ensures menu initialization and About dialog functionality work.
 
 Usage: ./build.sh [COMMAND] [OPTIONS]
 
@@ -100,7 +99,7 @@ EXAMPLES:
   ./build.sh build macos-arm64  # Cross-compile for macOS ARM
   ./build.sh debug memory       # Run with memory debugging
   ./build.sh clean && ./build.sh build all  # Clean rebuild all platforms
-  ./build.sh audit              # Full quality control check
+  ./build.sh audit              # Run quality control checks
 
 TROUBLESHOOTING:
   - Missing menus/About dialog: Ensure using this script, not 'fyne build'
@@ -118,13 +117,13 @@ check_deps() {
     
     # Check Go installation
     if ! command -v go &> /dev/null; then
-        error "Go not found. Install Go 1.21+ from https://golang.org/"
+        error "Go not found. Install Go 1.24+ from https://golang.org/"
         ((errors++))
     else
         local go_version
         go_version=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
-        if [[ "$(printf '%s\n' "1.21" "${go_version}" | sort -V | head -n1)" != "1.21" ]]; then
-            warn "Go version ${go_version} detected. Go 1.21+ recommended"
+        if [[ "$(printf '%s\n' "1.24" "${go_version}" | sort -V | head -n1)" != "1.24" ]]; then
+            warn "Go version ${go_version} detected. Go 1.24+ recommended"
         else
             success "Go ${go_version} detected"
         fi
@@ -158,7 +157,7 @@ check_deps() {
     success "All dependencies verified"
 }
 
-# Smart build cache management
+# Build cache management
 clean_build_cache() {
     log "Cleaning build cache and artifacts..."
     
@@ -197,7 +196,7 @@ auto_clean_obsolete() {
     echo "${VERSION}" > "${version_file}"
 }
 
-# Enhanced build function with progress and validation
+# Build function with progress and validation
 build() {
     local target="${1:-default}"
     local output_name="${BINARY_NAME}"
@@ -286,7 +285,7 @@ build() {
     fi
 }
 
-# Enhanced test runner with coverage
+# Test runner with coverage
 run_tests() {
     log "Running tests with coverage..."
     
@@ -309,7 +308,7 @@ run_tests() {
     fi
 }
 
-# Enhanced debug runner with environment setup
+# Debug runner with environment setup
 run_debug() {
     local debug_type="${1:-basic}"
     
@@ -343,7 +342,7 @@ run_audit() {
     # Format check
     log "Checking code formatting..."
     if [[ -n "$(gofmt -l .)" ]]; then
-        error "Code not properly formatted. Run './build.sh format'"
+        error "Code not formatted. Run './build.sh format'"
         exit 1
     fi
     

@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"otsu-obliterator/internal/algorithms/otsu2d"
-	"otsu-obliterator/internal/algorithms/triclass"
 	"otsu-obliterator/internal/opencv/safe"
 )
 
@@ -46,10 +45,7 @@ func NewManager() *Manager {
 
 func (m *Manager) registerAlgorithms() {
 	otsu2dAlg := otsu2d.NewProcessor()
-	triclassAlg := triclass.NewProcessor()
-
 	m.algorithms[otsu2dAlg.GetName()] = otsu2dAlg
-	m.algorithms[triclassAlg.GetName()] = triclassAlg
 }
 
 func (m *Manager) initializeDefaultParameters() {

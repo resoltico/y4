@@ -156,19 +156,11 @@ func (m *Manager) performMonitoringCheck() {
 	activeCount := m.GetActiveMatCount()
 
 	m.logger.Debug("MemoryManager", "memory statistics", map[string]interface{}{
-		"allocations":    alloc,
-		"deallocations":  dealloc,
-		"used_bytes":     used,
-		"active_mats":    activeCount,
-		"gocv_mat_count": gocv.MatProfile.Count(),
+		"allocations":   alloc,
+		"deallocations": dealloc,
+		"used_bytes":    used,
+		"active_mats":   activeCount,
 	})
-
-	if gocv.MatProfile.Count() > 100 {
-		m.logger.Warning("MemoryManager", "many Mat objects detected", map[string]interface{}{
-			"gocv_mat_count": gocv.MatProfile.Count(),
-			"active_mats":    activeCount,
-		})
-	}
 
 	if activeCount > 50 {
 		m.logOldestMats(5)
@@ -244,8 +236,7 @@ func (m *Manager) Cleanup() {
 	}
 
 	m.logger.Info("MemoryManager", "cleanup completed", map[string]interface{}{
-		"mats_cleaned":     matCount,
-		"final_gocv_count": gocv.MatProfile.Count(),
+		"mats_cleaned": matCount,
 	})
 
 	m.usedMemory = 0

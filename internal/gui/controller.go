@@ -130,6 +130,12 @@ func (c *Controller) SaveImage() {
 }
 
 func (c *Controller) ChangeAlgorithm(algorithm string) {
+	// Only support 2D Otsu algorithm
+	if algorithm != "2D Otsu" {
+		c.handleError("Algorithm error", fmt.Errorf("unsupported algorithm: %s", algorithm))
+		return
+	}
+
 	c.mu.Lock()
 	c.currentAlgorithm = algorithm
 	c.mu.Unlock()
@@ -196,7 +202,7 @@ func (c *Controller) ProcessImage() {
 		algorithm := c.getCurrentAlgorithm()
 		params := c.getCurrentParameters()
 
-		stages := c.getProcessingStages(algorithm)
+		stages := c.getProcessingStages()
 		stageCount := len(stages)
 
 		for i, stage := range stages {
@@ -243,32 +249,14 @@ func (c *Controller) ProcessImage() {
 	}()
 }
 
-func (c *Controller) updateProcessingStages(algorithm string) {
-	// This method is no longer needed - functionality moved to ProcessImage
-}
-
-func (c *Controller) getProcessingStages(algorithm string) []string {
-	switch algorithm {
-	case "2D Otsu":
-		return []string{
-			"Converting to grayscale",
-			"Applying preprocessing",
-			"Building 2D histogram",
-			"Finding threshold",
-			"Applying threshold",
-			"Finalizing result",
-		}
-	case "Iterative Triclass":
-		return []string{
-			"Converting to grayscale",
-			"Applying preprocessing",
-			"Initial threshold calculation",
-			"Iterative refinement",
-			"Convergence check",
-			"Finalizing result",
-		}
-	default:
-		return []string{"Processing"}
+func (c *Controller) getProcessingStages() []string {
+	return []string{
+		"Converting to grayscale",
+		"Applying preprocessing",
+		"Building 2D histogram",
+		"Finding threshold",
+		"Applying threshold",
+		"Finalizing result",
 	}
 }
 

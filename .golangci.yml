@@ -1,0 +1,172 @@
+run:
+  timeout: 5m
+  go: '1.24'
+  modules-download-mode: readonly
+  skip-dirs:
+    - vendor
+    - build
+    - coverage
+
+output:
+  formats:
+    - format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+
+linters:
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - gosec
+    - misspell
+    - prealloc
+    - unconvert
+    - unparam
+    - whitespace
+    - gocognit
+    - bodyclose
+    - exportloopref
+    - goconst
+    - godot
+    - gomnd
+    - gomodguard
+    - goprintffuncname
+    - nolintlint
+    - rowserrcheck
+    - sqlclosecheck
+    - stylecheck
+    - tparallel
+    - wastedassign
+
+  disable:
+    - varnamelen  # Variable names can be short in Go
+    - exhaustive  # Not needed for our use case
+    - cyclop      # Using gocyclo instead
+    - funlen      # Function length not critical
+
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      - (*github.com/rs/zerolog.Event).Msg
+      - (*github.com/rs/zerolog.Event).Msgf
+
+  govet:
+    enable-all: true
+    disable:
+      - fieldalignment  # Not critical for performance
+
+  gocyclo:
+    min-complexity: 15
+
+  gocognit:
+    min-complexity: 20
+
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G104  # Audit errors not checked - we handle this contextually
+
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+      - experimental
+      - opinionated
+    disabled-checks:
+      - paramTypeCombine  # Can reduce readability
+
+  gofmt:
+    simplify: true
+
+  goimports:
+    local-prefixes: otsu-obliterator
+
+  misspell:
+    locale: US
+
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: false
+
+  gomnd:
+    checks:
+      - argument
+      - case
+      - condition
+      - operation
+      - return
+      - assign
+    ignored-numbers:
+      - '0'
+      - '1'
+      - '2'
+      - '3'
+      - '255'  # Common for image processing
+    ignored-functions:
+      - math.*
+      - strconv.*
+
+  goconst:
+    min-len: 3
+    min-occurrences: 3
+    ignore-tests: true
+
+  stylecheck:
+    checks: ["all", "-ST1003"]  # Allow underscores in package names
+
+  whitespace:
+    multi-if: false
+    multi-func: false
+
+issues:
+  exclude-use-default: false
+  exclude-dirs:
+    - vendor
+    - build
+    - coverage
+
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gomnd
+        - goconst
+        - gosec
+
+    # Ignore complexity in test files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - gocognit
+
+    # OpenCV specific exceptions
+    - text: "G103: Use of unsafe calls should be audited"
+      linters:
+        - gosec
+      path: internal/opencv/
+
+    # Fyne UI specific exceptions
+    - text: "ST1003: should not use underscores in package names"
+      linters:
+        - stylecheck
+      path: internal/gui/
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  new: false

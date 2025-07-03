@@ -1,0 +1,317 @@
+[6:08:35 PM] % ./quality_check.sh
+[18:08:36] Validating development environment...
+✓ Go version 1.24 meets requirement (>= 1.24)
+✓ go.mod file exists
+✓ Module name matches project: otsu-obliterator
+[18:08:36] Checking dependencies...
+[18:08:36] Auto-installing govulncheck...
+✓ Auto-installed govulncheck
+✓ Dependencies are properly tidied
+⚠ govulncheck auto-install failed
+all modules verified
+✓ Module checksums verified
+[18:08:38] Checking code formatting...
+[18:08:38] Auto-installing goimports...
+✓ Auto-installed goimports
+✓ All Go files are properly formatted
+✗ goimports auto-install failed
+[18:08:39] Running static analysis...
+[18:08:39] Auto-installing staticcheck...
+✓ Auto-installed staticcheck
+[18:08:39] Auto-installing ineffassign...
+✓ Auto-installed ineffassign
+[18:08:40] Auto-installing misspell...
+✓ Auto-installed misspell
+[18:08:40] Auto-installing golangci-lint...
+✓ Auto-installed golangci-lint
+✓ go vet found no issues
+✗ staticcheck auto-install failed
+⚠ golangci-lint not available - install manually from https://golangci-lint.run/
+⚠ ineffassign auto-install failed
+⚠ misspell auto-install failed
+[18:08:45] Running security checks...
+[18:08:45] Auto-installing gosec...
+go: github.com/securecodewarrior/gosec/v2/cmd/gosec@latest: module github.com/securecodewarrior/gosec/v2/cmd/gosec: git ls-remote -q origin in /Users/erst/go/pkg/mod/cache/vcs/1437c821db927f024e16bacc195c3d4e329079b4f2b2a7b59aea199de7a97791: exit status 128:
+	remote: Repository not found.
+	fatal: repository 'https://github.com/securecodewarrior/gosec/' not found
+⚠ Failed to auto-install gosec
+[6:09:05 PM] % bash -x ./quality_check.sh
++ set -o errexit
++ set -o nounset
++ set -o pipefail
++++ dirname ./quality_check.sh
+++ cd .
+++ pwd
++ __dir=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4
+++ basename ./quality_check.sh
++ __file=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/quality_check.sh
++ readonly PROJECT_NAME=otsu-obliterator
++ PROJECT_NAME=otsu-obliterator
++ readonly GO_VERSION_REQUIRED=1.24
++ GO_VERSION_REQUIRED=1.24
++ readonly COVERAGE_THRESHOLD=75
++ COVERAGE_THRESHOLD=75
++ readonly MAX_COMPLEXITY=15
++ MAX_COMPLEXITY=15
++ readonly MAX_LINE_LENGTH=120
++ MAX_LINE_LENGTH=120
++ readonly 'RED=\033[0;31m'
++ RED='\033[0;31m'
++ readonly 'GREEN=\033[0;32m'
++ GREEN='\033[0;32m'
++ readonly 'BLUE=\033[0;34m'
++ BLUE='\033[0;34m'
++ readonly 'YELLOW=\033[1;33m'
++ YELLOW='\033[1;33m'
++ readonly 'PURPLE=\033[0;35m'
++ PURPLE='\033[0;35m'
++ readonly 'NC=\033[0m'
++ NC='\033[0m'
++ CHECKS_TOTAL=0
++ CHECKS_PASSED=0
++ CHECKS_FAILED=0
++ WARNINGS_COUNT=0
++ main
++ local command=check
++ case "${command}" in
++ validate_environment
++ log 'Validating development environment...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:05]\033[0m Validating development environment...'
+[18:09:05] Validating development environment...
++ check
++ CHECKS_TOTAL=1
++ command -v go
++ local go_version
+++ go version
+++ grep -oE 'go[0-9]+\.[0-9]+'
+++ sed s/go//
++ go_version=1.24
+++ printf '%s\n' 1.24 1.24
+++ sort -V
+++ head -n1
++ [[ 1.24 == \1\.\2\4 ]]
++ success 'Go version 1.24 meets requirement (>= 1.24)'
++ echo -e '\033[0;32m✓\033[0m Go version 1.24 meets requirement (>= 1.24)'
+✓ Go version 1.24 meets requirement (>= 1.24)
++ CHECKS_PASSED=1
++ check
++ CHECKS_TOTAL=2
++ [[ -f go.mod ]]
++ success 'go.mod file exists'
++ echo -e '\033[0;32m✓\033[0m go.mod file exists'
+✓ go.mod file exists
++ CHECKS_PASSED=2
++ check
++ CHECKS_TOTAL=3
++ local module_name
+++ head -n1 go.mod
+++ cut '-d ' -f2
++ module_name=otsu-obliterator
++ [[ otsu-obliterator == \o\t\s\u\-\o\b\l\i\t\e\r\a\t\o\r ]]
++ success 'Module name matches project: otsu-obliterator'
++ echo -e '\033[0;32m✓\033[0m Module name matches project: otsu-obliterator'
+✓ Module name matches project: otsu-obliterator
++ CHECKS_PASSED=3
++ check_dependencies
++ log 'Checking dependencies...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:05]\033[0m Checking dependencies...'
+[18:09:05] Checking dependencies...
++ auto_install_tool govulncheck 'go install golang.org/x/vuln/cmd/govulncheck@latest'
++ local tool_name=govulncheck
++ local 'install_cmd=go install golang.org/x/vuln/cmd/govulncheck@latest'
++ command -v govulncheck
++ log 'Auto-installing govulncheck...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:05]\033[0m Auto-installing govulncheck...'
+[18:09:05] Auto-installing govulncheck...
++ eval 'go install golang.org/x/vuln/cmd/govulncheck@latest'
+++ go install golang.org/x/vuln/cmd/govulncheck@latest
++ success 'Auto-installed govulncheck'
++ echo -e '\033[0;32m✓\033[0m Auto-installed govulncheck'
+✓ Auto-installed govulncheck
++ CHECKS_PASSED=4
++ return 0
++ check
++ CHECKS_TOTAL=4
++ go mod tidy -diff
++ success 'Dependencies are properly tidied'
++ echo -e '\033[0;32m✓\033[0m Dependencies are properly tidied'
+✓ Dependencies are properly tidied
++ CHECKS_PASSED=5
++ check
++ CHECKS_TOTAL=5
++ command -v govulncheck
++ warn 'govulncheck auto-install failed'
++ echo -e '\033[1;33m⚠\033[0m govulncheck auto-install failed'
+⚠ govulncheck auto-install failed
++ WARNINGS_COUNT=1
++ check
++ CHECKS_TOTAL=6
++ go mod verify
+all modules verified
++ success 'Module checksums verified'
++ echo -e '\033[0;32m✓\033[0m Module checksums verified'
+✓ Module checksums verified
++ CHECKS_PASSED=6
++ check_formatting
++ log 'Checking code formatting...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:07]\033[0m Checking code formatting...'
+[18:09:07] Checking code formatting...
++ auto_install_tool goimports 'go install golang.org/x/tools/cmd/goimports@latest'
++ local tool_name=goimports
++ local 'install_cmd=go install golang.org/x/tools/cmd/goimports@latest'
++ command -v goimports
++ log 'Auto-installing goimports...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:07]\033[0m Auto-installing goimports...'
+[18:09:07] Auto-installing goimports...
++ eval 'go install golang.org/x/tools/cmd/goimports@latest'
+++ go install golang.org/x/tools/cmd/goimports@latest
++ success 'Auto-installed goimports'
++ echo -e '\033[0;32m✓\033[0m Auto-installed goimports'
+✓ Auto-installed goimports
++ CHECKS_PASSED=7
++ return 0
++ check
++ CHECKS_TOTAL=7
++ local unformatted_files
+++ gofmt -l .
+++ grep -v vendor/
+++ true
++ unformatted_files=
++ [[ -z '' ]]
++ success 'All Go files are properly formatted'
++ echo -e '\033[0;32m✓\033[0m All Go files are properly formatted'
+✓ All Go files are properly formatted
++ CHECKS_PASSED=8
++ check
++ CHECKS_TOTAL=8
++ command -v goimports
++ fail 'goimports auto-install failed'
++ echo -e '\033[0;31m✗\033[0m goimports auto-install failed'
+✗ goimports auto-install failed
++ CHECKS_FAILED=1
++ run_static_analysis
++ log 'Running static analysis...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:07]\033[0m Running static analysis...'
+[18:09:07] Running static analysis...
++ auto_install_tool staticcheck 'go install honnef.co/go/tools/cmd/staticcheck@latest'
++ local tool_name=staticcheck
++ local 'install_cmd=go install honnef.co/go/tools/cmd/staticcheck@latest'
++ command -v staticcheck
++ log 'Auto-installing staticcheck...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:07]\033[0m Auto-installing staticcheck...'
+[18:09:07] Auto-installing staticcheck...
++ eval 'go install honnef.co/go/tools/cmd/staticcheck@latest'
+++ go install honnef.co/go/tools/cmd/staticcheck@latest
++ success 'Auto-installed staticcheck'
++ echo -e '\033[0;32m✓\033[0m Auto-installed staticcheck'
+✓ Auto-installed staticcheck
++ CHECKS_PASSED=9
++ return 0
++ auto_install_tool ineffassign 'go install github.com/gordonklaus/ineffassign@latest'
++ local tool_name=ineffassign
++ local 'install_cmd=go install github.com/gordonklaus/ineffassign@latest'
++ command -v ineffassign
++ log 'Auto-installing ineffassign...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:08]\033[0m Auto-installing ineffassign...'
+[18:09:08] Auto-installing ineffassign...
++ eval 'go install github.com/gordonklaus/ineffassign@latest'
+++ go install github.com/gordonklaus/ineffassign@latest
++ success 'Auto-installed ineffassign'
++ echo -e '\033[0;32m✓\033[0m Auto-installed ineffassign'
+✓ Auto-installed ineffassign
++ CHECKS_PASSED=10
++ return 0
++ auto_install_tool misspell 'go install github.com/client9/misspell/cmd/misspell@latest'
++ local tool_name=misspell
++ local 'install_cmd=go install github.com/client9/misspell/cmd/misspell@latest'
++ command -v misspell
++ log 'Auto-installing misspell...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:08]\033[0m Auto-installing misspell...'
+[18:09:08] Auto-installing misspell...
++ eval 'go install github.com/client9/misspell/cmd/misspell@latest'
+++ go install github.com/client9/misspell/cmd/misspell@latest
++ success 'Auto-installed misspell'
++ echo -e '\033[0;32m✓\033[0m Auto-installed misspell'
+✓ Auto-installed misspell
++ CHECKS_PASSED=11
++ return 0
++ command -v golangci-lint
++ log 'Auto-installing golangci-lint...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:09]\033[0m Auto-installing golangci-lint...'
+[18:09:09] Auto-installing golangci-lint...
++ curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh
+++ go env GOPATH
++ sh -s -- -b /Users/erst/go/bin latest
++ success 'Auto-installed golangci-lint'
++ echo -e '\033[0;32m✓\033[0m Auto-installed golangci-lint'
+✓ Auto-installed golangci-lint
++ CHECKS_PASSED=12
++ check
++ CHECKS_TOTAL=9
++ go vet ./...
++ success 'go vet found no issues'
++ echo -e '\033[0;32m✓\033[0m go vet found no issues'
+✓ go vet found no issues
++ CHECKS_PASSED=13
++ check
++ CHECKS_TOTAL=10
++ command -v staticcheck
++ fail 'staticcheck auto-install failed'
++ echo -e '\033[0;31m✗\033[0m staticcheck auto-install failed'
+✗ staticcheck auto-install failed
++ CHECKS_FAILED=2
++ check
++ CHECKS_TOTAL=11
++ command -v golangci-lint
++ warn 'golangci-lint not available - install manually from https://golangci-lint.run/'
++ echo -e '\033[1;33m⚠\033[0m golangci-lint not available - install manually from https://golangci-lint.run/'
+⚠ golangci-lint not available - install manually from https://golangci-lint.run/
++ WARNINGS_COUNT=2
++ check
++ CHECKS_TOTAL=12
++ command -v ineffassign
++ warn 'ineffassign auto-install failed'
++ echo -e '\033[1;33m⚠\033[0m ineffassign auto-install failed'
+⚠ ineffassign auto-install failed
++ WARNINGS_COUNT=3
++ check
++ CHECKS_TOTAL=13
++ command -v misspell
++ warn 'misspell auto-install failed'
++ echo -e '\033[1;33m⚠\033[0m misspell auto-install failed'
+⚠ misspell auto-install failed
++ WARNINGS_COUNT=4
++ check_security
++ log 'Running security checks...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:13]\033[0m Running security checks...'
+[18:09:13] Running security checks...
++ auto_install_tool gosec 'go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest'
++ local tool_name=gosec
++ local 'install_cmd=go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest'
++ command -v gosec
++ log 'Auto-installing gosec...'
+++ date +%H:%M:%S
++ echo -e '\033[0;34m[18:09:13]\033[0m Auto-installing gosec...'
+[18:09:13] Auto-installing gosec...
++ eval 'go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest'
+++ go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+go: github.com/securecodewarrior/gosec/v2/cmd/gosec@latest: module github.com/securecodewarrior/gosec/v2/cmd/gosec: git ls-remote -q origin in /Users/erst/go/pkg/mod/cache/vcs/1437c821db927f024e16bacc195c3d4e329079b4f2b2a7b59aea199de7a97791: exit status 128:
+	remote: Repository not found.
+	fatal: repository 'https://github.com/securecodewarrior/gosec/' not found
++ warn 'Failed to auto-install gosec'
++ echo -e '\033[1;33m⚠\033[0m Failed to auto-install gosec'
+⚠ Failed to auto-install gosec
++ WARNINGS_COUNT=5
++ return 1
+[6:09:24 PM] % 

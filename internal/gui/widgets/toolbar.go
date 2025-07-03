@@ -11,18 +11,16 @@ import (
 )
 
 type Toolbar struct {
-	container       *fyne.Container
-	loadButton      *widget.Button
-	saveButton      *widget.Button
-	algorithmSelect *widget.Select
-	processButton   *widget.Button
-	statusLabel     *widget.Label
-	metricsLabel    *widget.Label
+	container     *fyne.Container
+	loadButton    *widget.Button
+	saveButton    *widget.Button
+	processButton *widget.Button
+	statusLabel   *widget.Label
+	metricsLabel  *widget.Label
 
-	loadHandler            func()
-	saveHandler            func()
-	processHandler         func()
-	algorithmChangeHandler func(string)
+	loadHandler    func()
+	saveHandler    func()
+	processHandler func()
 }
 
 func NewToolbar() *Toolbar {
@@ -42,12 +40,6 @@ func (t *Toolbar) createComponents() {
 	t.processButton = widget.NewButton("Process", t.onProcessClicked)
 	t.processButton.Importance = widget.HighImportance
 
-	t.algorithmSelect = widget.NewSelect(
-		[]string{"2D Otsu", "Iterative Triclass"},
-		t.onAlgorithmChanged,
-	)
-	t.algorithmSelect.SetSelected("2D Otsu")
-
 	t.statusLabel = widget.NewLabel("Ready")
 	t.metricsLabel = widget.NewLabel("PSNR: -- | SSIM: --")
 }
@@ -59,23 +51,7 @@ func (t *Toolbar) buildLayout() {
 	border.StrokeColor = color.RGBA{R: 231, G: 231, B: 231, A: 255}
 
 	leftSection := container.NewHBox(t.loadButton, t.saveButton)
-
-	algorithmGroup := container.NewVBox(
-		widget.NewLabel("Algorithm"),
-		t.algorithmSelect,
-	)
-
-	processGroup := container.NewVBox(
-		widget.NewLabel("Action"),
-		t.processButton,
-	)
-
-	centerSection := container.NewHBox(
-		algorithmGroup,
-		widget.NewSeparator(),
-		processGroup,
-	)
-
+	centerSection := container.NewHBox(t.processButton)
 	statusSection := container.NewHBox(t.statusLabel)
 	rightSection := container.NewHBox(t.metricsLabel)
 
@@ -113,9 +89,7 @@ func (t *Toolbar) onProcessClicked() {
 }
 
 func (t *Toolbar) onAlgorithmChanged(algorithm string) {
-	if t.algorithmChangeHandler != nil {
-		t.algorithmChangeHandler(algorithm)
-	}
+	// No-op: only 2D Otsu supported
 }
 
 func (t *Toolbar) GetContainer() *fyne.Container {
@@ -135,7 +109,7 @@ func (t *Toolbar) SetProcessHandler(handler func()) {
 }
 
 func (t *Toolbar) SetAlgorithmChangeHandler(handler func(string)) {
-	t.algorithmChangeHandler = handler
+	// No-op: algorithm selection removed
 }
 
 func (t *Toolbar) SetStatus(status string) {

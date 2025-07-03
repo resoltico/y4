@@ -1,11 +1,10 @@
 # Otsu Obliterator
 
-A high-performance image processing application implementing advanced Otsu thresholding algorithms with real-time preview and memory-safe OpenCV operations.
+A high-performance image processing application implementing advanced 2D Otsu thresholding algorithm with real-time preview and memory-safe OpenCV operations.
 
 ## Features
 
 - **2D Otsu Thresholding** - Advanced implementation with neighborhood analysis and sub-pixel precision
-- **Iterative Triclass** - Multi-threshold segmentation with convergence detection and floating-point accuracy
 - **Quality Modes** - Fast (integer precision) vs Best (sub-pixel convergence) processing modes
 - **Real-time Preview** - Live parameter adjustment with immediate visual feedback
 - **Memory Safety** - Automatic OpenCV Mat lifecycle management with leak detection
@@ -23,6 +22,24 @@ cd otsu-obliterator
 
 # Build and run immediately
 ./build.sh build && ./build/otsu-obliterator
+```
+
+## Quality Assurance
+
+Run comprehensive code quality checks:
+
+```bash
+# Run all quality checks
+./quality_check.sh
+
+# Install development tools
+./quality_check.sh install-tools
+
+# Run essential checks only
+./quality_check.sh fast
+
+# Check test coverage only
+./quality_check.sh coverage
 ```
 
 ## Build Options
@@ -58,9 +75,9 @@ cd otsu-obliterator
 ./build.sh package linux      # Creates distribution archive
 ```
 
-## Critical Build Information
+## Build System
 
-**Important**: This project uses `go build` instead of `fyne build` to preserve proper application entry points. The build script automatically handles this correctly.
+**Important**: This project uses `go build` instead of `fyne build` to preserve application entry points. The build script handles this automatically.
 
 **Do NOT manually use**:
 ```bash
@@ -72,7 +89,7 @@ fyne build -o binary ./cmd/otsu-obliterator  # Wrong - bypasses main()
 ./build.sh build [target]  # Correct - preserves main() execution
 ```
 
-This ensures proper menu initialization and About dialog functionality. If you see missing menus or empty About dialogs, verify you're using the build script rather than manual `fyne build`.
+This ensures menu initialization and About dialog functionality. If you see missing menus or empty About dialogs, verify you're using the build script rather than manual `fyne build`.
 
 ## Requirements
 
@@ -99,11 +116,9 @@ Follow [GoCV installation guide](https://gocv.io/getting-started/)
 ## Usage
 
 1. **Load Image** - Click Load button or drag image file
-2. **Select Algorithm** - Choose between 2D Otsu or Iterative Triclass
-3. **Choose Quality** - Fast (integer precision) or Best (sub-pixel precision)
-4. **Adjust Parameters** - Use sliders for real-time tuning
-5. **Process** - Click Process button for thresholding
-6. **Save Result** - Export processed image in PNG/JPEG format
+2. **Adjust Parameters** - Use sliders for real-time tuning
+3. **Process** - Click Process button for thresholding
+4. **Save Result** - Export processed image in PNG/JPEG format
 
 ### Quality Modes
 
@@ -123,14 +138,13 @@ Follow [GoCV installation guide](https://gocv.io/getting-started/)
 **2D Otsu:**
 - Window Size: Neighborhood analysis window (3-21, odd numbers)
 - Histogram Bins: Threshold precision (16-256)
-- Pixel Weight Factor: Balance between pixel and neighborhood values (0.0-1.0)
-- Smoothing Sigma: Gaussian smoothing strength (0.0-5.0)
-
-**Iterative Triclass:**
-- Max Iterations: Convergence limit (1-20)
-- Convergence Epsilon: Threshold stability requirement (0.1-10.0)
-- Gap Factor: Separation between threshold classes (0.0-1.0)
-- Min TBD Fraction: Minimum "to be determined" pixel ratio (0.001-0.2)
+- Smoothing Strength: Gaussian smoothing strength (0.0-5.0)
+- Edge Preservation: MAOTSU preprocessing for edge preservation
+- Noise Robustness: Morphological operations for noise reduction
+- Gaussian Preprocessing: Pre-smoothing before processing
+- Use Log Histogram: Apply logarithmic scaling to histogram
+- Normalize Histogram: Normalize histogram values
+- Apply Contrast Enhancement: CLAHE contrast enhancement
 
 ## Performance
 
@@ -157,6 +171,18 @@ make dev
 ./build.sh lint    # Static analysis
 ./build.sh test    # Unit tests with coverage
 ./build.sh bench   # Performance benchmarks
+```
+
+### Quality Assurance
+```bash
+# Run comprehensive quality checks
+./quality_check.sh
+
+# Install missing development tools
+./quality_check.sh install-tools
+
+# Fast quality check (essential checks only)
+./quality_check.sh fast
 ```
 
 ### Memory Debugging
@@ -223,7 +249,7 @@ Access application information via Help → About menu, showing:
 - **Verification**: Look for "MAIN: Starting main function" in debug output
 
 **Runtime Issues:**
-- Ensure OpenCV is properly installed and accessible
+- Ensure OpenCV is installed and accessible
 - Check that image files are in supported formats (PNG, JPEG, TIFF, BMP)
 - Monitor memory usage with debug builds if processing large images
 
@@ -237,6 +263,38 @@ Access application information via Help → About menu, showing:
 - Ensure Fyne tool is installed: `go install fyne.io/fyne/v2/cmd/fyne@latest`
 - Verify FyneApp.toml configuration is complete
 - Check platform-specific dependencies are met
+
+## Quality Assurance
+
+The project includes comprehensive quality assurance tools:
+
+### Quality Check Script
+```bash
+# Run all quality checks
+./quality_check.sh
+
+# Available commands:
+./quality_check.sh check          # All checks (default)
+./quality_check.sh fast           # Essential checks only
+./quality_check.sh coverage       # Test coverage analysis
+./quality_check.sh security       # Security checks only
+./quality_check.sh format         # Code formatting checks
+./quality_check.sh install-tools  # Install development tools
+```
+
+### Quality Checks Include:
+- **Environment Validation** - Go version, module integrity
+- **Dependency Verification** - Security vulnerabilities, module checksums
+- **Code Formatting** - gofmt, goimports compliance
+- **Static Analysis** - go vet, staticcheck, golangci-lint
+- **Security Scanning** - gosec, hardcoded secrets detection
+- **Test Coverage** - Race detection, coverage thresholds
+- **Code Complexity** - Cyclomatic complexity analysis
+- **Code Metrics** - Line length, TODO/FIXME tracking
+- **Performance Benchmarks** - Benchmark execution
+- **Documentation** - Package documentation coverage
+- **Build Verification** - Cross-platform compilation
+- **Git Status** - Repository cleanliness
 
 ## License, Author
 

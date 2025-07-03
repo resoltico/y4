@@ -27,20 +27,6 @@ type ParameterPanel struct {
 	normalizeCheck          *widget.Check
 	contrastCheck           *widget.Check
 
-	// Reusable widgets for Iterative Triclass
-	initialMethod              *widget.Select
-	maxIterSlider              *widget.Slider
-	maxIterLabel               *widget.Label
-	convergencePrecisionSlider *widget.Slider
-	convergencePrecisionLabel  *widget.Label
-	minTBDSlider               *widget.Slider
-	minTBDLabel                *widget.Label
-	classSeparationSlider      *widget.Slider
-	classSeparationLabel       *widget.Label
-	preprocessingCheck         *widget.Check
-	cleanupCheck               *widget.Check
-	bordersCheck               *widget.Check
-
 	currentAlgorithm string
 }
 
@@ -76,25 +62,6 @@ func (pp *ParameterPanel) createWidgets() {
 	pp.useLogCheck = widget.NewCheck("Use Log Histogram", nil)
 	pp.normalizeCheck = widget.NewCheck("Normalize Histogram", nil)
 	pp.contrastCheck = widget.NewCheck("Apply Contrast Enhancement", nil)
-
-	// Create Iterative Triclass widgets
-	pp.initialMethod = widget.NewSelect([]string{"otsu", "mean", "median"}, nil)
-
-	pp.maxIterSlider = widget.NewSlider(5, 15)
-	pp.maxIterLabel = widget.NewLabel("Max Iterations: 10")
-
-	pp.convergencePrecisionSlider = widget.NewSlider(0.1, 10.0)
-	pp.convergencePrecisionLabel = widget.NewLabel("Convergence Precision: 1.0")
-
-	pp.minTBDSlider = widget.NewSlider(0.001, 0.2)
-	pp.minTBDLabel = widget.NewLabel("Min TBD Fraction: 0.010")
-
-	pp.classSeparationSlider = widget.NewSlider(0.1, 0.8)
-	pp.classSeparationLabel = widget.NewLabel("Class Separation: 0.50")
-
-	pp.preprocessingCheck = widget.NewCheck("Preprocessing", nil)
-	pp.cleanupCheck = widget.NewCheck("Result Cleanup", nil)
-	pp.bordersCheck = widget.NewCheck("Preserve Borders", nil)
 }
 
 func (pp *ParameterPanel) GetContainer() *fyne.Container {
@@ -159,44 +126,6 @@ func (pp *ParameterPanel) setupEventHandlers() {
 	pp.contrastCheck.OnChanged = func(checked bool) {
 		pp.parameterChangeHandler("apply_contrast_enhancement", checked)
 	}
-
-	// Iterative Triclass handlers
-	pp.initialMethod.OnChanged = func(value string) {
-		pp.parameterChangeHandler("initial_threshold_method", value)
-	}
-
-	pp.maxIterSlider.OnChanged = func(value float64) {
-		intValue := int(value)
-		pp.maxIterLabel.SetText("Max Iterations: " + strconv.Itoa(intValue))
-		pp.parameterChangeHandler("max_iterations", intValue)
-	}
-
-	pp.convergencePrecisionSlider.OnChanged = func(value float64) {
-		pp.convergencePrecisionLabel.SetText("Convergence Precision: " + strconv.FormatFloat(value, 'f', 1, 64))
-		pp.parameterChangeHandler("convergence_precision", value)
-	}
-
-	pp.minTBDSlider.OnChanged = func(value float64) {
-		pp.minTBDLabel.SetText("Min TBD Fraction: " + strconv.FormatFloat(value, 'f', 3, 64))
-		pp.parameterChangeHandler("minimum_tbd_fraction", value)
-	}
-
-	pp.classSeparationSlider.OnChanged = func(value float64) {
-		pp.classSeparationLabel.SetText("Class Separation: " + strconv.FormatFloat(value, 'f', 2, 64))
-		pp.parameterChangeHandler("class_separation", value)
-	}
-
-	pp.preprocessingCheck.OnChanged = func(checked bool) {
-		pp.parameterChangeHandler("preprocessing", checked)
-	}
-
-	pp.cleanupCheck.OnChanged = func(checked bool) {
-		pp.parameterChangeHandler("result_cleanup", checked)
-	}
-
-	pp.bordersCheck.OnChanged = func(checked bool) {
-		pp.parameterChangeHandler("preserve_borders", checked)
-	}
 }
 
 func (pp *ParameterPanel) UpdateParameters(algorithm string, params map[string]interface{}) {
@@ -209,22 +138,16 @@ func (pp *ParameterPanel) UpdateParameters(algorithm string, params map[string]i
 	pp.parametersContent.RemoveAll()
 	pp.parametersContent.Add(widget.NewLabel("Parameters:"))
 
-	switch algorithm {
-	case "2D Otsu":
+	if algorithm == "2D Otsu" {
 		pp.buildOtsu2DParameters(params)
-	case "Iterative Triclass":
-		pp.buildTriclassParameters(params)
 	}
 
 	pp.container.Refresh()
 }
 
 func (pp *ParameterPanel) updateValues(params map[string]interface{}) {
-	switch pp.currentAlgorithm {
-	case "2D Otsu":
+	if pp.currentAlgorithm == "2D Otsu" {
 		pp.updateOtsu2DValues(params)
-	case "Iterative Triclass":
-		pp.updateTriclassValues(params)
 	}
 }
 
@@ -255,33 +178,6 @@ func (pp *ParameterPanel) updateOtsu2DValues(params map[string]interface{}) {
 	}
 	if contrast := pp.getBoolParam(params, "apply_contrast_enhancement", false); contrast != pp.contrastCheck.Checked {
 		pp.contrastCheck.SetChecked(contrast)
-	}
-}
-
-func (pp *ParameterPanel) updateTriclassValues(params map[string]interface{}) {
-	if method := pp.getStringParam(params, "initial_threshold_method", "otsu"); method != pp.initialMethod.Selected {
-		pp.initialMethod.SetSelected(method)
-	}
-	if maxIter := pp.getIntParam(params, "max_iterations", 10); maxIter != int(pp.maxIterSlider.Value) {
-		pp.maxIterSlider.SetValue(float64(maxIter))
-	}
-	if precision := pp.getFloatParam(params, "convergence_precision", 1.0); precision != pp.convergencePrecisionSlider.Value {
-		pp.convergencePrecisionSlider.SetValue(precision)
-	}
-	if minTBD := pp.getFloatParam(params, "minimum_tbd_fraction", 0.01); minTBD != pp.minTBDSlider.Value {
-		pp.minTBDSlider.SetValue(minTBD)
-	}
-	if separation := pp.getFloatParam(params, "class_separation", 0.5); separation != pp.classSeparationSlider.Value {
-		pp.classSeparationSlider.SetValue(separation)
-	}
-	if preprocess := pp.getBoolParam(params, "preprocessing", false); preprocess != pp.preprocessingCheck.Checked {
-		pp.preprocessingCheck.SetChecked(preprocess)
-	}
-	if cleanup := pp.getBoolParam(params, "result_cleanup", true); cleanup != pp.cleanupCheck.Checked {
-		pp.cleanupCheck.SetChecked(cleanup)
-	}
-	if borders := pp.getBoolParam(params, "preserve_borders", false); borders != pp.bordersCheck.Checked {
-		pp.bordersCheck.SetChecked(borders)
 	}
 }
 
@@ -318,43 +214,6 @@ func (pp *ParameterPanel) buildOtsu2DParameters(params map[string]interface{}) {
 		container.NewHBox(pp.edgePreservationCheck, pp.noiseRobustnessCheck),
 		container.NewHBox(pp.gaussianPreprocessCheck, pp.useLogCheck),
 		container.NewHBox(pp.normalizeCheck, pp.contrastCheck),
-	))
-}
-
-func (pp *ParameterPanel) buildTriclassParameters(params map[string]interface{}) {
-	pp.initialMethod.SetSelected(pp.getStringParam(params, "initial_threshold_method", "otsu"))
-
-	maxIter := pp.getIntParam(params, "max_iterations", 10)
-	pp.maxIterSlider.SetValue(float64(maxIter))
-	pp.maxIterLabel.SetText("Max Iterations: " + strconv.Itoa(maxIter))
-
-	convergencePrecision := pp.getFloatParam(params, "convergence_precision", 1.0)
-	pp.convergencePrecisionSlider.SetValue(convergencePrecision)
-	pp.convergencePrecisionLabel.SetText("Convergence Precision: " + strconv.FormatFloat(convergencePrecision, 'f', 1, 64))
-
-	minTBD := pp.getFloatParam(params, "minimum_tbd_fraction", 0.01)
-	pp.minTBDSlider.SetValue(minTBD)
-	pp.minTBDLabel.SetText("Min TBD Fraction: " + strconv.FormatFloat(minTBD, 'f', 3, 64))
-
-	classSeparation := pp.getFloatParam(params, "class_separation", 0.5)
-	pp.classSeparationSlider.SetValue(classSeparation)
-	pp.classSeparationLabel.SetText("Class Separation: " + strconv.FormatFloat(classSeparation, 'f', 2, 64))
-
-	pp.preprocessingCheck.SetChecked(pp.getBoolParam(params, "preprocessing", false))
-	pp.cleanupCheck.SetChecked(pp.getBoolParam(params, "result_cleanup", true))
-	pp.bordersCheck.SetChecked(pp.getBoolParam(params, "preserve_borders", false))
-
-	pp.parametersContent.Add(container.NewVBox(
-		container.NewHBox(
-			container.NewVBox(widget.NewLabel("Initial Method"), pp.initialMethod),
-			container.NewVBox(pp.maxIterLabel, pp.maxIterSlider),
-			container.NewVBox(pp.convergencePrecisionLabel, pp.convergencePrecisionSlider),
-		),
-		container.NewHBox(
-			container.NewVBox(pp.minTBDLabel, pp.minTBDSlider),
-			container.NewVBox(pp.classSeparationLabel, pp.classSeparationSlider),
-		),
-		container.NewHBox(pp.preprocessingCheck, pp.cleanupCheck, pp.bordersCheck),
 	))
 }
 
