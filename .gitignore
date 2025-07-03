@@ -1,0 +1,5 @@
+# macOS metadata
+.DS_Store
+
+# Go auto-generated data
+go.sum

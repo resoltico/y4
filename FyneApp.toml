@@ -1,0 +1,10 @@
+[Details]
+Icon = "icon.png"
+Name = "Otsu Obliterator"
+ID = "com.imageprocessing.otsu-obliterator"
+Version = "1.0.0"
+Build = 1
+
+[Development]
+Threaded = "true"
+fyneDo = "true"
