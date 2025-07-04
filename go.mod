@@ -42,6 +42,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// Tool dependencies managed separately
+// Tool dependencies managed by quality_check.go runtime installation
 // go install honnef.co/go/tools/cmd/staticcheck@latest
 // go install golang.org/x/vuln/cmd/govulncheck@latest

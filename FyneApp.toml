@@ -8,3 +8,6 @@ Build = 1
 [Development]
 Threaded = "true"
 fyneDo = "true"
+
+[Migrations]
+fyneDo = true
