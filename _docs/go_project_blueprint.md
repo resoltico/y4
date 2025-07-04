@@ -4,7 +4,7 @@
 
 ### Technology Stack
 - **Go 1.24 exclusively** - Use latest language features
-- **Flat package structure** - Single main package for applications ≤2500 LOC
+- **Flat package structure** - Single main package for applications ±3500 LOC
 - **Direct instantiation** - No dependency injection containers
 - **Native tooling** - Go-based quality assurance over external scripts
 - **Defensive programming** - Input validation and error context without architectural complexity
@@ -12,7 +12,7 @@
 ### Architecture Mandates
 
 #### Flat Structure with Safety Guards
-- Single package per application (≤2500 LOC)
+- Single package per application (±3500 LOC)
 - File naming: `prefix_concern.go` (ui_*, processing_*, metrics_*, io_*)
 - No `internal/` directories
 - No package hierarchies beyond main
@@ -142,11 +142,6 @@ func main() {
 
 ## LOC Management
 
-### Target Ranges
-- **≤1500 LOC**: Pure flat structure, minimal validation
-- **1500-2500 LOC**: Flat structure with defensive programming
-- **>2500 LOC**: Consider architectural patterns beyond this blueprint
-
 ### LOC Allocation Guidelines
 - Core business logic: 60-70%
 - User interface: 15-25%
@@ -229,7 +224,7 @@ go func() {
 - Minimal memory allocation overhead
 
 ### Code Quality Targets
-- ≤2500 LOC total project
+- ±3500 LOC total project
 - Zero race conditions
 - 100% external library operation validation
 - Zero linter warnings
@@ -245,7 +240,7 @@ go func() {
 - Native quality tool usage confirmation
 
 ### Automatic Rejection Criteria
-- Any `internal/` package usage for applications ≤2500 LOC
+- Any `internal/` package usage for applications ±3500 LOC
 - Missing validation for external library operations
 - Generic error messages without context
 - External scripts for quality checking

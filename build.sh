@@ -5,6 +5,7 @@ set -euo pipefail
 readonly BINARY_NAME="otsu-obliterator"
 readonly VERSION="${VERSION:-1.0.0}"
 readonly BUILD_DIR="${BUILD_DIR:-build}"
+readonly GO_VERSION="1.24"
 
 readonly LDFLAGS="-s -w -X main.version=${VERSION}"
 readonly BUILD_TAGS="netgo"
@@ -30,14 +31,14 @@ check_deps() {
     log "Checking dependencies..."
     
     if ! command -v go &> /dev/null; then
-        error "Go not found. Install Go 1.24+ from https://golang.org/"
+        error "Go not found. Install Go ${GO_VERSION} from https://golang.org/"
         exit 1
     fi
     
     local go_version
     go_version=$(go version | grep -oE 'go[0-9]+\.[0-9]+' | sed 's/go//')
-    if [[ "$(printf '%s\n' "1.24" "${go_version}" | sort -V | head -n1)" != "1.24" ]]; then
-        error "Go version ${go_version} detected. Go 1.24+ required"
+    if [[ "${go_version}" != "${GO_VERSION}" ]]; then
+        error "Go version ${go_version} detected. Go ${GO_VERSION} required"
         exit 1
     fi
     

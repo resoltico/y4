@@ -9,12 +9,12 @@ import (
 )
 
 const (
-	ProjectName       = "otsu-obliterator"
-	GoVersionRequired = "1.24"
-	ColorGreen        = "\033[0;32m"
-	ColorRed          = "\033[0;31m"
-	ColorYellow       = "\033[1;33m"
-	ColorReset        = "\033[0m"
+	ProjectName = "otsu-obliterator"
+	GoVersion   = "1.24"
+	ColorGreen  = "\033[0;32m"
+	ColorRed    = "\033[0;31m"
+	ColorYellow = "\033[1;33m"
+	ColorReset  = "\033[0m"
 )
 
 type QualityChecker struct {
@@ -31,7 +31,6 @@ func main() {
 
 	qc := &QualityChecker{}
 
-	// Get GOPATH once at startup
 	gopath, err := qc.runCommand("go", "env", "GOPATH")
 	if err != nil {
 		fmt.Printf("%s✗%s Could not determine GOPATH\n", ColorRed, ColorReset)
@@ -79,7 +78,7 @@ func (qc *QualityChecker) validateEnvironment() {
 
 	output, err := qc.runCommand("go", "version")
 	if err != nil {
-		qc.fail("Go not found or unable to determine version")
+		qc.fail("Go not found")
 		return
 	}
 
@@ -91,11 +90,11 @@ func (qc *QualityChecker) validateEnvironment() {
 	}
 
 	version := matches[1]
-	if !qc.versionAtLeast(version, GoVersionRequired) {
-		qc.fail(fmt.Sprintf("Go version %s below requirement (>= %s)", version, GoVersionRequired))
+	if version != GoVersion {
+		qc.fail(fmt.Sprintf("Go version %s required, found %s", GoVersion, version))
 		return
 	}
-	qc.success(fmt.Sprintf("Go version %s meets requirement (>= %s)", version, GoVersionRequired))
+	qc.success(fmt.Sprintf("Go version %s matches requirement", version))
 
 	if !qc.fileExists("go.mod") {
 		qc.fail("go.mod not found")
@@ -156,7 +155,7 @@ func (qc *QualityChecker) checkFormatting() {
 
 	unformatted := strings.TrimSpace(output)
 	if unformatted == "" {
-		qc.success("All Go files formatted correctly")
+		qc.success("All Go files formatted")
 	} else {
 		files := strings.Split(unformatted, "\n")
 		qc.fail(fmt.Sprintf("Unformatted files found: %s", strings.Join(files, ", ")))
@@ -276,21 +275,6 @@ func (qc *QualityChecker) runCommand(command string, args ...string) (string, er
 func (qc *QualityChecker) runCommandSilent(command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	return cmd.Run()
-}
-
-func (qc *QualityChecker) versionAtLeast(version, required string) bool {
-	vParts := strings.Split(version, ".")
-	rParts := strings.Split(required, ".")
-
-	for i := 0; i < len(vParts) && i < len(rParts); i++ {
-		if vParts[i] < rParts[i] {
-			return false
-		}
-		if vParts[i] > rParts[i] {
-			return true
-		}
-	}
-	return len(vParts) >= len(rParts)
 }
 
 func (qc *QualityChecker) extractModuleName() string {
