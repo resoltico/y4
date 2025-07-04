@@ -1,8 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"log"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -21,6 +22,10 @@ type Toolbar struct {
 	metricsLabel  *widget.Label
 	detailsLabel  *widget.Label
 	fileSaveMenu  *FileSaveMenu
+
+	processingInProgress bool
+	currentProcessingCtx context.Context
+	cancelProcessing     context.CancelFunc
 }
 
 func NewToolbar(app *Application) *Toolbar {
@@ -73,24 +78,31 @@ func (t *Toolbar) buildLayout() {
 func (t *Toolbar) handleLoadImage() {
 	dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil || reader == nil {
-			log.Printf("[DEBUG] Load dialog cancelled or error: %v", err)
+			DebugTraceParam("LoadDialog", "closed", "cancelled_or_error")
 			return
 		}
 		defer reader.Close()
 
-		log.Printf("[DEBUG] Loading image from: %s", reader.URI().String())
+		startTime := time.Now()
+		debugSystem := GetDebugSystem()
+		opID := debugSystem.TraceProcessingStart("image_load", &OtsuParameters{}, [2]int{0, 0})
+
 		t.SetStatus("Loading image...")
+		DebugTraceMemory("before_image_load")
 
 		imageData, loadErr := LoadImageFromReader(reader)
+		loadDuration := time.Since(startTime)
+
 		if loadErr != nil {
-			log.Printf("[ERROR] Image load failed: %v", loadErr)
+			debugSystem.TraceProcessingEnd(opID, loadDuration, false, loadErr.Error())
 			dialog.ShowError(loadErr, t.app.window)
 			t.SetStatus("Load failed")
 			return
 		}
 
-		log.Printf("[DEBUG] Image loaded successfully: %dx%d, %d channels, format: %s",
-			imageData.Width, imageData.Height, imageData.Channels, imageData.Format)
+		debugSystem.TraceProcessingEnd(opID, loadDuration, true, "")
+		debugSystem.TraceImageOperation(opID, "load", [2]int{0, 0}, [2]int{imageData.Width, imageData.Height}, loadDuration)
+		DebugTraceMemory("after_image_load")
 
 		fyne.Do(func() {
 			t.app.imageViewer.SetOriginalImage(imageData.Image)
@@ -99,6 +111,8 @@ func (t *Toolbar) handleLoadImage() {
 			t.SetStatus("Image loaded")
 			t.SetDetails(fmt.Sprintf("Image: %dx%d pixels, %d channels, %s format",
 				imageData.Width, imageData.Height, imageData.Channels, imageData.Format))
+
+			DebugTraceParam("ImageLoaded", "none", fmt.Sprintf("%dx%d", imageData.Width, imageData.Height))
 		})
 	}, t.app.window)
 }
@@ -106,72 +120,127 @@ func (t *Toolbar) handleLoadImage() {
 func (t *Toolbar) handleSaveImage() {
 	processedData := t.app.processing.GetProcessedImage()
 	if processedData == nil {
-		log.Printf("[DEBUG] No processed image to save")
 		return
 	}
 
-	log.Printf("[DEBUG] Starting save dialog")
 	t.SetStatus("Preparing save...")
 
 	t.fileSaveMenu.ShowSaveDialog(processedData, func(writer fyne.URIWriteCloser, err error) {
 		if err != nil {
-			log.Printf("[ERROR] Save failed: %v", err)
 			dialog.ShowError(err, t.app.window)
 			t.SetStatus("Save failed")
 			return
 		}
 
 		if writer != nil {
-			log.Printf("[DEBUG] Image saved successfully to: %s", writer.URI().String())
 			t.SetStatus("Image saved")
+			DebugTraceParam("ImageSaved", "none", writer.URI().String())
 		}
 	})
 }
 
 func (t *Toolbar) handleProcessImage() {
+	params := t.app.parameters.GetCurrentParameters()
+	t.handleProcessImageWithParams(params)
+}
+
+func (t *Toolbar) handleProcessImageWithParams(params *OtsuParameters) {
 	originalData := t.app.processing.GetOriginalImage()
 	if originalData == nil {
-		log.Printf("[ERROR] No original image for processing")
 		return
 	}
 
-	log.Printf("[DEBUG] Starting image processing")
+	if t.processingInProgress {
+		// Cancel current processing
+		if t.cancelProcessing != nil {
+			t.cancelProcessing()
+		}
+		return
+	}
+
+	t.processingInProgress = true
 	t.SetStatus("Processing...")
-	t.processButton.Disable()
+	t.processButton.SetText("Cancel")
+
+	// Create processing context with timeout
+	t.currentProcessingCtx, t.cancelProcessing = context.WithCancel(context.Background())
 
 	go func() {
-		params := t.app.parameters.GetParameters()
-		log.Printf("[DEBUG] Processing parameters: method=%s, window=%d, bins=%d",
-			getProcessingMethodName(params), params.WindowSize, params.HistogramBins)
+		defer func() {
+			fyne.Do(func() {
+				t.processingInProgress = false
+				t.processButton.SetText("Process")
+			})
+		}()
 
-		result, metrics, err := t.app.processing.ProcessImage(params)
+		startTime := time.Now()
+		debugSystem := GetDebugSystem()
+		imageSize := [2]int{originalData.Width, originalData.Height}
+
+		method := t.getProcessingMethodName(params)
+		opID := debugSystem.TraceProcessingStart(method, params, imageSize)
+
+		DebugTraceMemory("before_processing")
+
+		// Validate parameters before processing
+		if err := validateOtsuParameters(params, imageSize); err != nil {
+			processingDuration := time.Since(startTime)
+			debugSystem.TraceValidationError(err, "parameter_validation")
+			debugSystem.TraceProcessingEnd(opID, processingDuration, false, err.Error())
+
+			fyne.Do(func() {
+				dialog.ShowError(err, t.app.window)
+				t.SetStatus("Parameter validation failed")
+			})
+			return
+		}
+
+		// Process with timeout and validation
+		result, metrics, err := t.app.processing.ProcessImageWithTimeout(t.currentProcessingCtx, params)
+		processingDuration := time.Since(startTime)
+
+		DebugTraceMemory("after_processing")
 
 		if err != nil {
-			log.Printf("[ERROR] Processing failed: %v", err)
-		} else {
-			log.Printf("[DEBUG] Processing completed successfully")
-			if metrics != nil {
-				log.Printf("[DEBUG] Metrics calculated: F=%.3f, pF=%.3f, NRM=%.3f, DRD=%.3f",
-					metrics.FMeasure(), metrics.PseudoFMeasure(), metrics.NRM(), metrics.DRD())
-			}
+			debugSystem.TraceProcessingEnd(opID, processingDuration, false, err.Error())
+
+			fyne.Do(func() {
+				if t.currentProcessingCtx.Err() == context.Canceled {
+					t.SetStatus("Processing cancelled")
+				} else {
+					dialog.ShowError(err, t.app.window)
+					t.SetStatus("Processing failed")
+				}
+			})
+			return
+		}
+
+		debugSystem.TraceProcessingEnd(opID, processingDuration, true, "")
+		debugSystem.TraceImageOperation(opID, method, imageSize, [2]int{result.Width, result.Height}, processingDuration)
+
+		if metrics != nil {
+			debugSystem.TraceThresholdCalculation(opID, [2]int{0, 0}, metrics.FMeasure())
 		}
 
 		fyne.Do(func() {
-			t.processButton.Enable()
-
-			if err != nil {
-				dialog.ShowError(err, t.app.window)
-				t.SetStatus("Processing failed")
-				return
-			}
-
 			t.app.imageViewer.SetProcessedImage(result.Image)
 			t.SetStatus("Processing complete")
 			t.SetMetrics(metrics)
 			t.SetProcessingDetails(params, result, metrics)
 			t.saveButton.Enable()
+
+			DebugTraceParam("ProcessingComplete", method, fmt.Sprintf("duration=%dms", processingDuration.Milliseconds()))
 		})
 	}()
+}
+
+func (t *Toolbar) getProcessingMethodName(params *OtsuParameters) string {
+	if params.MultiScaleProcessing {
+		return fmt.Sprintf("multi_scale_%d_levels", params.PyramidLevels)
+	} else if params.RegionAdaptiveThresholding {
+		return fmt.Sprintf("region_adaptive_%d_grid", params.RegionGridSize)
+	}
+	return "single_scale"
 }
 
 func (t *Toolbar) SetStatus(status string) {
@@ -196,6 +265,18 @@ func (t *Toolbar) SetMetrics(metrics *BinaryImageMetrics) {
 	)
 
 	t.metricsLabel.SetText(basicMetrics)
+
+	// Debug trace metrics
+	debugSystem := GetDebugSystem()
+	debugSystem.logger.Info("metrics calculated",
+		"f_measure", metrics.FMeasure(),
+		"pseudo_f_measure", metrics.PseudoFMeasure(),
+		"nrm", metrics.NRM(),
+		"drd", metrics.DRD(),
+		"mpm", metrics.MPM(),
+		"bfc", metrics.BackgroundForegroundContrast(),
+		"skeleton", metrics.SkeletonSimilarity(),
+	)
 }
 
 func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData, metrics *BinaryImageMetrics) {
@@ -203,7 +284,7 @@ func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData
 		return
 	}
 
-	processingMethod := getProcessingMethodName(params)
+	processingMethod := t.getProcessingMethodDisplayName(params)
 
 	advancedMetrics := fmt.Sprintf("MPM: %.3f | BFC: %.3f | Skeleton: %.3f | Method: %s",
 		metrics.MPM(),
@@ -236,7 +317,7 @@ func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData
 	t.SetDetails(detailsText)
 }
 
-func getProcessingMethodName(params *OtsuParameters) string {
+func (t *Toolbar) getProcessingMethodDisplayName(params *OtsuParameters) string {
 	if params.MultiScaleProcessing {
 		return fmt.Sprintf("Multi-Scale (%d levels)", params.PyramidLevels)
 	} else if params.RegionAdaptiveThresholding {
@@ -277,4 +358,11 @@ func (t *Toolbar) getPreprocessingDescription(params *OtsuParameters) string {
 
 func (t *Toolbar) GetContainer() *fyne.Container {
 	return t.container
+}
+
+func (t *Toolbar) CancelCurrentProcessing() {
+	if t.processingInProgress && t.cancelProcessing != nil {
+		t.cancelProcessing()
+		t.SetStatus("Processing cancelled")
+	}
 }

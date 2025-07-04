@@ -1,0 +1,93 @@
+[2:13:53 AM] % go run cmd/quality_check/main.go check
+Validating environment...
+✓ Go version 1.24 matches requirement
+✓ go.mod exists
+✓ Module name matches project ('otsu-obliterator')
+Ensuring tools are available...
+✓ staticcheck is available
+✓ govulncheck is available
+Checking code formatting...
+✗ gofmt check failed
+Running core quality checks...
+✗ go vet failed
+✗ tests with race detection failed
+✓ dependency management passed
+✓ module verification passed
+Running external tools...
+✗ staticcheck found issues:
+-: # otsu-obliterator
+./app.go:237:2: declared and not used: debugText
+./app.go:237:15: string not terminated
+./main.go:37:24: application.Run undefined (type *Application has no field or method Run)
+./processing_timeout.go:90:65: in call to withProcessingTimeout, type func() (*ImageData, *BinaryImageMetrics, error) of func() (*ImageData, *BinaryImageMetrics, error) {…} does not match func() (T, error) (cannot infer T)
+./ui_parameter_binder.go:49:18: undefined: pb
+./ui_parameter_binder.go:134:39: pb.paramsBinding.Get undefined (type binding.DataMap has no field or method Get)
+./ui_parameter_binder.go:162:11: binding.Set undefined (type binding.DataItem has no field or method Set)
+./ui_parameter_binder.go:172:25: binding.Get undefined (type binding.DataItem has no field or method Get)
+./ui_parameter_binder.go:191:11: binding.Set undefined (type binding.DataItem has no field or method Set)
+./ui_parameter_binder.go:198:25: binding.Get undefined (type binding.DataItem has no field or method Get)
+./ui_parameter_binder.go:198:25: too many errors (compile)
+✗ Security vulnerabilities detected:
+govulncheck: loading packages: 
+There are errors with the provided package patterns:
+
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/app.go:237:15: raw string literal not terminated
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/app.go:265:3: expected ';', found 'EOF'
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/app.go:265:3: expected '}', found 'EOF'
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/app.go:237:15: malformed constant: `DEBUG SYSTEM STATUS
+
+The debug system provides monitoring and tracing capabilities.
+
+Use 'go run . 2>&1 | grep -E "(DEBUG|ERROR|WARN)"' to filter logs.
+
+	debugLabel := widget.NewLabel(debugText)
+	debugLabel.Wrapping = fyne.TextWrapWord
+
+	dumpButton := widget.NewButton("Dump Current State", func() {
+		a.debugSystem.DumpSystemState()
+	})
+
+	content := container.NewVBox(
+		debugLabel,
+		widget.NewSeparator(),
+		dumpButton,
+	)
+
+	debugScroll := container.NewScroll(content)
+	debugScroll.SetMinSize(fyne.NewSize(600, 500))
+
+	dialog.NewCustom("Debug Information", "Close", debugScroll, a.window).Show()
+}
+
+func (a *Application) Run() error {
+	a.window.ShowAndRun()
+	return nil
+}
+
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/app.go:237:2: declared and not used: debugText
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/main.go:37:24: application.Run undefined (type *Application has no field or method Run)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:90:65: in call to withProcessingTimeout, type func() (*ImageData, *BinaryImageMetrics, error) of (func() (*ImageData, *BinaryImageMetrics, error) literal) does not match func() (T, error) (cannot infer T)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:49:18: undefined: pb
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:134:39: pb.paramsBinding.Get undefined (type binding.DataMap has no field or method Get)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:162:11: binding.Set undefined (type binding.DataItem has no field or method Set)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:172:25: binding.Get undefined (type binding.DataItem has no field or method Get)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:191:11: binding.Set undefined (type binding.DataItem has no field or method Set)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:198:25: binding.Get undefined (type binding.DataItem has no field or method Get)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:215:11: binding.Set undefined (type binding.DataItem has no field or method Set)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:222:25: binding.Get undefined (type binding.DataItem has no field or method Get)
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/ui_parameter_binder.go:240:17: binding.Set undefined (type binding.DataItem has no field or method Set)
+
+For details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.
+
+Verifying build...
+✗ Build failed
+
+==================================
+Quality Check Summary
+==================================
+Passed: 7
+Failed: 6
+
+6 quality checks failed
+exit status 1
+[2:14:39 AM] % 

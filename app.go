@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -19,6 +20,8 @@ type Application struct {
 	imageViewer *ImageViewer
 	parameters  *ParameterPanel
 	processing  *ProcessingEngine
+
+	debugSystem *DebugSystem
 }
 
 func NewApplication(fyneApp fyne.App, window fyne.Window, ctx context.Context, cancel context.CancelFunc) *Application {
@@ -29,13 +32,27 @@ func NewApplication(fyneApp fyne.App, window fyne.Window, ctx context.Context, c
 		cancel:  cancel,
 	}
 
+	// Initialize debug system first
+	app.debugSystem = InitDebugSystem(DebugConfig{
+		LogLevel:      slog.LevelDebug,
+		EnableTracing: true,
+		EnableMonitor: true,
+		ConsoleOutput: true,
+	})
+
 	app.processing = NewProcessingEngine()
-	app.toolbar = NewToolbar(app)
 	app.imageViewer = NewImageViewer()
 	app.parameters = NewParameterPanel(app)
+	app.toolbar = NewToolbar(app)
 
 	app.setupWindow()
 	app.setupMenu()
+
+	app.debugSystem.logger.Info("application initialized",
+		"debug_enabled", true,
+		"tracing_enabled", true,
+		"monitoring_enabled", true,
+	)
 
 	return app
 }
@@ -62,9 +79,27 @@ func (a *Application) setupWindow() {
 	a.window.SetContent(content)
 
 	a.window.SetCloseIntercept(func() {
-		a.cancel()
+		a.cleanup()
 		a.window.Close()
 	})
+}
+
+func (a *Application) cleanup() {
+	// Cancel any ongoing processing
+	if a.toolbar != nil {
+		a.toolbar.CancelCurrentProcessing()
+	}
+
+	// Close debug system
+	if a.debugSystem != nil {
+		a.debugSystem.DumpSystemState()
+		a.debugSystem.Close()
+	}
+
+	// Cancel application context
+	a.cancel()
+
+	a.debugSystem.logger.Info("application cleanup completed")
 }
 
 func (a *Application) setupMenu() {
@@ -76,10 +111,15 @@ func (a *Application) setupMenu() {
 		a.showHelp()
 	}
 
+	debugAction := func() {
+		a.showDebugInfo()
+	}
+
 	fileMenu := fyne.NewMenu("File")
 	helpMenu := fyne.NewMenu("Help",
 		fyne.NewMenuItem("About", aboutAction),
 		fyne.NewMenuItem("User Guide", helpAction),
+		fyne.NewMenuItem("Debug Info", debugAction),
 	)
 
 	mainMenu := fyne.NewMainMenu(fileMenu, helpMenu)
@@ -110,6 +150,9 @@ func (a *Application) showAbout() {
 	featuresLabel.Alignment = fyne.TextAlignCenter
 	featuresLabel.Wrapping = fyne.TextWrapWord
 
+	techLabel := widget.NewLabel("Built with Go 1.24, Fyne v2.6.1, GoCV v0.41.0")
+	techLabel.Alignment = fyne.TextAlignCenter
+
 	content := container.NewVBox(
 		widget.NewSeparator(),
 		nameLabel,
@@ -118,6 +161,8 @@ func (a *Application) showAbout() {
 		descriptionLabel,
 		widget.NewSeparator(),
 		featuresLabel,
+		widget.NewSeparator(),
+		techLabel,
 		widget.NewSeparator(),
 		authorLabel,
 		licenseLabel,
@@ -129,12 +174,6 @@ func (a *Application) showAbout() {
 
 func (a *Application) showHelp() {
 	helpText := `OTSU OBLITERATOR USER GUIDE
-
-BASIC USAGE:
-1. Click "Load Image" to select an image file
-2. Adjust parameters in the right panel
-3. Click "Process" to apply 2D Otsu thresholding
-4. Use "Save Result" to export the processed image
 
 PROCESSING METHODS:
 • Single Scale: Standard 2D Otsu thresholding
@@ -175,7 +214,8 @@ TIPS:
 • Use Multi-Scale for complex documents
 • Enable Adaptive Window Sizing for varying text sizes
 • Apply Homomorphic Filtering for uneven illumination
-• Use Anisotropic Diffusion for noisy images`
+• Use Anisotropic Diffusion for noisy images
+• Check Debug Info menu for performance analysis`
 
 	helpLabel := widget.NewLabel(helpText)
 	helpLabel.Wrapping = fyne.TextWrapWord
@@ -184,6 +224,39 @@ TIPS:
 	helpScroll.SetMinSize(fyne.NewSize(600, 500))
 
 	dialog.NewCustom("User Guide", "Close", helpScroll, a.window).Show()
+}
+
+func (a *Application) showDebugInfo() {
+	if a.debugSystem == nil {
+		dialog.ShowInformation("Debug Info", "Debug system not available", a.window)
+		return
+	}
+
+	a.debugSystem.DumpSystemState()
+
+	debugText := `DEBUG SYSTEM STATUS
+
+The debug system provides monitoring and tracing capabilities.
+
+Use 'go run . 2>&1 | grep -E "(DEBUG|ERROR|WARN)"' to filter logs.
+
+	debugLabel := widget.NewLabel(debugText)
+	debugLabel.Wrapping = fyne.TextWrapWord
+
+	dumpButton := widget.NewButton("Dump Current State", func() {
+		a.debugSystem.DumpSystemState()
+	})
+
+	content := container.NewVBox(
+		debugLabel,
+		widget.NewSeparator(),
+		dumpButton,
+	)
+
+	debugScroll := container.NewScroll(content)
+	debugScroll.SetMinSize(fyne.NewSize(600, 500))
+
+	dialog.NewCustom("Debug Information", "Close", debugScroll, a.window).Show()
 }
 
 func (a *Application) Run() error {
