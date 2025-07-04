@@ -69,7 +69,7 @@ func CalculateBinaryMetrics(groundTruth, result gocv.Mat) *BinaryImageMetrics {
 	metrics.calculateDRD(groundTruth, result)
 	metrics.calculateMPM(groundTruth, result)
 	metrics.calculateBackgroundForegroundContrast(groundTruth, result)
-	metrics.calculateSkeletonMetrics(groundTruth, result)
+	metrics.calculateSkeletonSimilarity(groundTruth, result)
 
 	return metrics
 }
@@ -461,4 +461,73 @@ func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, 
 	}
 
 	m.pbcValue = (backgroundClutter + foregroundSpeckle) / 2.0
+}
+
+func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result gocv.Mat) {
+	gtSkeleton := m.extractSkeleton(groundTruth)
+	defer gtSkeleton.Close()
+	resSkeleton := m.extractSkeleton(result)
+	defer resSkeleton.Close()
+
+	if gtSkeleton.Empty() || resSkeleton.Empty() {
+		m.skeletonValue = 0.0
+		return
+	}
+
+	// Calculate skeleton overlap
+	intersection := gocv.NewMat()
+	defer intersection.Close()
+	gocv.BitwiseAnd(gtSkeleton, resSkeleton, &intersection)
+
+	unionMat := gocv.NewMat()
+	defer unionMat.Close()
+	gocv.BitwiseOr(gtSkeleton, resSkeleton, &unionMat)
+
+	intersectionPixels := gocv.CountNonZero(intersection)
+	unionPixels := gocv.CountNonZero(unionMat)
+
+	if unionPixels == 0 {
+		m.skeletonValue = 0.0
+		return
+	}
+
+	// Jaccard similarity index
+	m.skeletonValue = float64(intersectionPixels) / float64(unionPixels)
+}
+
+func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
+	if src.Empty() {
+		return gocv.NewMat()
+	}
+
+	// Convert to binary if not already
+	binary := gocv.NewMat()
+	gocv.Threshold(src, &binary, 127, 255, gocv.ThresholdBinary)
+
+	// Apply morphological skeletonization using iterative thinning
+	skeleton := gocv.NewMat()
+	temp := gocv.NewMat()
+	defer temp.Close()
+
+	// Initialize skeleton as zeros
+	skeleton = gocv.NewMatWithSize(src.Rows(), src.Cols(), gocv.MatTypeCV8UC1)
+	gocv.SetTo(&skeleton, gocv.NewScalar(0, 0, 0, 0), gocv.NewMat())
+
+	element := gocv.GetStructuringElement(gocv.MorphCross, image.Point{X: 3, Y: 3})
+	defer element.Close()
+
+	for {
+		gocv.MorphologyEx(binary, &temp, gocv.MorphOpen, element)
+		gocv.BitwiseNot(temp, &temp)
+		gocv.BitwiseAnd(binary, temp, &temp)
+		gocv.BitwiseOr(skeleton, temp, &skeleton)
+		gocv.MorphologyEx(binary, &binary, gocv.MorphErode, element)
+
+		if gocv.CountNonZero(binary) == 0 {
+			break
+		}
+	}
+
+	binary.Close()
+	return skeleton
 }

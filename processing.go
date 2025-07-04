@@ -257,10 +257,15 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 			regionParams.RegionAdaptiveThresholding = false
 			regionResult := pe.processSingleScale(roi, &regionParams)
 
-			regionResult.CopyTo(&result.RowRange(y, endY).ColRange(x, endX))
+			// Get row and column ranges for copying
+			rowRange := result.RowRange(y, endY)
+			colRange := rowRange.ColRange(x, endX)
+			regionResult.CopyTo(&colRange)
 
 			roi.Close()
 			regionResult.Close()
+			rowRange.Close()
+			colRange.Close()
 		}
 	}
 
