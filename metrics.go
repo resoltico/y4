@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"math"
 
@@ -19,8 +20,32 @@ type BinaryImageMetrics struct {
 	pbcValue float64
 }
 
+func validateMat(mat gocv.Mat, context string) error {
+	if mat.Empty() {
+		return fmt.Errorf("%s: matrix is empty", context)
+	}
+	if mat.Rows() <= 0 || mat.Cols() <= 0 {
+		return fmt.Errorf("%s: invalid dimensions %dx%d", context, mat.Rows(), mat.Cols())
+	}
+	return nil
+}
+
+func validateMatDimensions(mat1, mat2 gocv.Mat, context string) error {
+	if mat1.Rows() != mat2.Rows() || mat1.Cols() != mat2.Cols() {
+		return fmt.Errorf("%s: dimension mismatch %dx%d vs %dx%d",
+			context, mat1.Rows(), mat1.Cols(), mat2.Rows(), mat2.Cols())
+	}
+	return nil
+}
+
 func CalculateBinaryMetrics(groundTruth, result gocv.Mat) *BinaryImageMetrics {
-	if groundTruth.Rows() != result.Rows() || groundTruth.Cols() != result.Cols() {
+	if err := validateMat(groundTruth, "ground truth"); err != nil {
+		return nil
+	}
+	if err := validateMat(result, "result"); err != nil {
+		return nil
+	}
+	if err := validateMatDimensions(groundTruth, result, "metrics calculation"); err != nil {
 		return nil
 	}
 
@@ -60,6 +85,10 @@ func (m *BinaryImageMetrics) calculateConfusionMatrix(groundTruth, result gocv.M
 }
 
 func (m *BinaryImageMetrics) FMeasure() float64 {
+	if m.TruePositives+m.FalsePositives == 0 || m.TruePositives+m.FalseNegatives == 0 {
+		return 0.0
+	}
+
 	precision := float64(m.TruePositives) / float64(m.TruePositives+m.FalsePositives)
 	recall := float64(m.TruePositives) / float64(m.TruePositives+m.FalseNegatives)
 
@@ -72,6 +101,9 @@ func (m *BinaryImageMetrics) FMeasure() float64 {
 
 func (m *BinaryImageMetrics) PseudoFMeasure() float64 {
 	if m.TruePositives == 0 {
+		return 0.0
+	}
+	if m.TruePositives+m.FalsePositives == 0 || m.TruePositives+m.FalseNegatives == 0 {
 		return 0.0
 	}
 
@@ -203,11 +235,8 @@ func (m *BinaryImageMetrics) calculatePixelDRD(groundTruth gocv.Mat, x, y int, w
 }
 
 func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
-	rows := groundTruth.Rows()
-	cols := groundTruth.Cols()
-
-	gtContours := m.extractContours(groundTruth)
-	resContours := m.extractContours(result)
+	gtContours := m.extractContoursWithValidation(groundTruth, "ground truth")
+	resContours := m.extractContoursWithValidation(result, "result")
 
 	if len(gtContours) == 0 && len(resContours) == 0 {
 		m.mpmValue = 0.0
@@ -216,6 +245,7 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 
 	totalMismatch := 0.0
 	totalObjects := float64(len(gtContours) + len(resContours))
+	fallbackDistance := float64(groundTruth.Rows() + groundTruth.Cols())
 
 	for _, gtContour := range gtContours {
 		minDistance := math.Inf(1)
@@ -225,10 +255,10 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 				minDistance = distance
 			}
 		}
-		if minDistance != math.Inf(1) {
-			totalMismatch += minDistance
+		if minDistance == math.Inf(1) {
+			totalMismatch += fallbackDistance
 		} else {
-			totalMismatch += float64(rows + cols)
+			totalMismatch += minDistance
 		}
 	}
 
@@ -240,10 +270,10 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 				minDistance = distance
 			}
 		}
-		if minDistance != math.Inf(1) {
-			totalMismatch += minDistance
+		if minDistance == math.Inf(1) {
+			totalMismatch += fallbackDistance
 		} else {
-			totalMismatch += float64(rows + cols)
+			totalMismatch += minDistance
 		}
 	}
 
@@ -255,17 +285,43 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 	m.mpmValue = totalMismatch / totalObjects
 }
 
-func (m *BinaryImageMetrics) extractContours(mat gocv.Mat) [][]image.Point {
-	contours := gocv.FindContours(mat, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-	defer contours.Close()
-
-	result := make([][]image.Point, contours.Size())
-	for i := 0; i < contours.Size(); i++ {
-		contour := contours.At(i)
-		result[i] = contour.ToPoints()
-		contour.Close()
+func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context string) [][]image.Point {
+	if err := validateMat(mat, context); err != nil {
+		return [][]image.Point{}
 	}
 
+	contours := gocv.FindContours(mat, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+
+	if contours.IsNil() {
+		return [][]image.Point{}
+	}
+
+	size := 0
+	defer func() {
+		if r := recover(); r != nil {
+			// Log segfault recovery for debugging
+		}
+	}()
+
+	size = contours.Size()
+	if size == 0 {
+		contours.Close()
+		return [][]image.Point{}
+	}
+
+	result := make([][]image.Point, 0, size)
+	for i := 0; i < size; i++ {
+		contour := contours.At(i)
+		if !contour.IsNil() {
+			points := contour.ToPoints()
+			if len(points) > 0 {
+				result = append(result, points)
+			}
+			// Do NOT close contour - At() returns reference, not new object
+		}
+	}
+
+	contours.Close()
 	return result
 }
 

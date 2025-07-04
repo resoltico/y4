@@ -4,10 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
 	"image/jpeg"
+	_ "image/jpeg"
 	"image/png"
+	_ "image/png"
 	"io"
 	"path/filepath"
 	"strings"
@@ -62,7 +62,7 @@ func SaveImageToWriter(writer fyne.URIWriteCloser, imageData *ImageData) error {
 	}
 
 	ext := strings.ToLower(writer.URI().Extension())
-	
+
 	var err error
 	switch ext {
 	case ".jpg", ".jpeg":

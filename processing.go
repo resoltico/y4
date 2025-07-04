@@ -53,8 +53,16 @@ func (pe *ProcessingEngine) GetProcessedImage() *ImageData {
 
 func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *BinaryImageMetrics, error) {
 	if pe.originalImage == nil {
-		return nil, nil, fmt.Errorf("no original image loaded")
+		return nil, nil, fmt.Errorf("processing engine: no original image loaded")
 	}
+
+	if err := validateMat(pe.originalImage.Mat, "original image"); err != nil {
+		return nil, nil, fmt.Errorf("processing engine: %w", err)
+	}
+
+	// Log dimensions for debugging
+	rows, cols := pe.originalImage.Mat.Rows(), pe.originalImage.Mat.Cols()
+	fmt.Printf("DEBUG: Processing %dx%d image\n", rows, cols)
 
 	gray := pe.convertToGrayscale(pe.originalImage.Mat)
 	defer gray.Close()
@@ -119,6 +127,9 @@ func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *B
 	pe.processedImage = processedData
 
 	metrics := CalculateBinaryMetrics(pe.originalImage.Mat, result)
+	if metrics == nil {
+		return processedData, nil, fmt.Errorf("metrics calculation failed for %dx%d image", result.Rows(), result.Cols())
+	}
 
 	return processedData, metrics, nil
 }

@@ -127,14 +127,14 @@ func (pp *ParameterPanel) GetParameters() *OtsuParameters {
 	histBins := int(pp.histBinsSlider.Value)
 
 	return &OtsuParameters{
-		WindowSize:              windowSize,
-		HistogramBins:           histBins,
-		SmoothingStrength:       pp.smoothingStrengthSlider.Value,
-		EdgePreservation:        pp.edgePreservationCheck.Checked,
-		NoiseRobustness:         pp.noiseRobustnessCheck.Checked,
-		GaussianPreprocessing:   pp.gaussianPreprocessCheck.Checked,
-		UseLogHistogram:         pp.useLogCheck.Checked,
-		NormalizeHistogram:      pp.normalizeCheck.Checked,
+		WindowSize:               windowSize,
+		HistogramBins:            histBins,
+		SmoothingStrength:        pp.smoothingStrengthSlider.Value,
+		EdgePreservation:         pp.edgePreservationCheck.Checked,
+		NoiseRobustness:          pp.noiseRobustnessCheck.Checked,
+		GaussianPreprocessing:    pp.gaussianPreprocessCheck.Checked,
+		UseLogHistogram:          pp.useLogCheck.Checked,
+		NormalizeHistogram:       pp.normalizeCheck.Checked,
 		ApplyContrastEnhancement: pp.contrastCheck.Checked,
 	}
 }

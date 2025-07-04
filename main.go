@@ -29,11 +29,11 @@ func main() {
 	window := fyneApp.NewWindow(AppName)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	application := NewApplication(fyneApp, window, ctx, cancel)
-	
+
 	setupSignalHandling(cancel)
-	
+
 	if err := application.Run(); err != nil {
 		log.Fatalf("Application failed: %v", err)
 	}
