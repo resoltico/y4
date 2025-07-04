@@ -88,11 +88,20 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 		return [][]image.Point{}
 	}
 
-	contours := gocv.FindContours(mat, gocv.RetrievalExternal, gocv.ChainApproxSimple)
-
-	if contours.IsNil() {
-		return [][]image.Point{}
+	// Convert to single channel if needed
+	var gray gocv.Mat
+	if mat.Channels() > 1 {
+		gray = gocv.NewMat()
+		defer gray.Close()
+		gocv.CvtColor(mat, &gray, gocv.ColorBGRToGray)
+	} else {
+		gray = mat
 	}
+
+	// Ensure binary threshold
+	binary := gocv.NewMat()
+	defer binary.Close()
+	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -100,6 +109,12 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 			return
 		}
 	}()
+
+	contours := gocv.FindContours(binary, gocv.RetrievalExternal, gocv.ChainApproxSimple)
+
+	if contours.IsNil() {
+		return [][]image.Point{}
+	}
 
 	size := contours.Size()
 	if size == 0 {

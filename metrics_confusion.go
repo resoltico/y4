@@ -37,6 +37,22 @@ func validateMatDimensions(mat1, mat2 gocv.Mat, context string) error {
 	return nil
 }
 
+func safeCountNonZero(mat gocv.Mat, context string) (int, error) {
+	if err := validateMat(mat, context); err != nil {
+		return 0, err
+	}
+
+	if mat.Channels() == 1 {
+		return gocv.CountNonZero(mat), nil
+	}
+
+	gray := gocv.NewMat()
+	defer gray.Close()
+	gocv.CvtColor(mat, &gray, gocv.ColorBGRToGray)
+
+	return gocv.CountNonZero(gray), nil
+}
+
 func CalculateBinaryMetrics(groundTruth, result gocv.Mat) *BinaryImageMetrics {
 	if err := validateMat(groundTruth, "ground truth"); err != nil {
 		return nil

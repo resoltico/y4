@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -72,18 +73,24 @@ func (t *Toolbar) buildLayout() {
 func (t *Toolbar) handleLoadImage() {
 	dialog.ShowFileOpen(func(reader fyne.URIReadCloser, err error) {
 		if err != nil || reader == nil {
+			log.Printf("[DEBUG] Load dialog cancelled or error: %v", err)
 			return
 		}
 		defer reader.Close()
 
+		log.Printf("[DEBUG] Loading image from: %s", reader.URI().String())
 		t.SetStatus("Loading image...")
 
 		imageData, loadErr := LoadImageFromReader(reader)
 		if loadErr != nil {
+			log.Printf("[ERROR] Image load failed: %v", loadErr)
 			dialog.ShowError(loadErr, t.app.window)
 			t.SetStatus("Load failed")
 			return
 		}
+
+		log.Printf("[DEBUG] Image loaded successfully: %dx%d, %d channels, format: %s",
+			imageData.Width, imageData.Height, imageData.Channels, imageData.Format)
 
 		fyne.Do(func() {
 			t.app.imageViewer.SetOriginalImage(imageData.Image)
@@ -99,19 +106,23 @@ func (t *Toolbar) handleLoadImage() {
 func (t *Toolbar) handleSaveImage() {
 	processedData := t.app.processing.GetProcessedImage()
 	if processedData == nil {
+		log.Printf("[DEBUG] No processed image to save")
 		return
 	}
 
+	log.Printf("[DEBUG] Starting save dialog")
 	t.SetStatus("Preparing save...")
 
 	t.fileSaveMenu.ShowSaveDialog(processedData, func(writer fyne.URIWriteCloser, err error) {
 		if err != nil {
+			log.Printf("[ERROR] Save failed: %v", err)
 			dialog.ShowError(err, t.app.window)
 			t.SetStatus("Save failed")
 			return
 		}
 
 		if writer != nil {
+			log.Printf("[DEBUG] Image saved successfully to: %s", writer.URI().String())
 			t.SetStatus("Image saved")
 		}
 	})
@@ -120,15 +131,30 @@ func (t *Toolbar) handleSaveImage() {
 func (t *Toolbar) handleProcessImage() {
 	originalData := t.app.processing.GetOriginalImage()
 	if originalData == nil {
+		log.Printf("[ERROR] No original image for processing")
 		return
 	}
 
+	log.Printf("[DEBUG] Starting image processing")
 	t.SetStatus("Processing...")
 	t.processButton.Disable()
 
 	go func() {
 		params := t.app.parameters.GetParameters()
+		log.Printf("[DEBUG] Processing parameters: method=%s, window=%d, bins=%d",
+			getProcessingMethodName(params), params.WindowSize, params.HistogramBins)
+
 		result, metrics, err := t.app.processing.ProcessImage(params)
+
+		if err != nil {
+			log.Printf("[ERROR] Processing failed: %v", err)
+		} else {
+			log.Printf("[DEBUG] Processing completed successfully")
+			if metrics != nil {
+				log.Printf("[DEBUG] Metrics calculated: F=%.3f, pF=%.3f, NRM=%.3f, DRD=%.3f",
+					metrics.FMeasure(), metrics.PseudoFMeasure(), metrics.NRM(), metrics.DRD())
+			}
+		}
 
 		fyne.Do(func() {
 			t.processButton.Enable()
@@ -177,12 +203,7 @@ func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData
 		return
 	}
 
-	processingMethod := "Single Scale"
-	if params.MultiScaleProcessing {
-		processingMethod = fmt.Sprintf("Multi-Scale (%d levels)", params.PyramidLevels)
-	} else if params.RegionAdaptiveThresholding {
-		processingMethod = fmt.Sprintf("Region Adaptive (%dx%d grid)", params.RegionGridSize, params.RegionGridSize)
-	}
+	processingMethod := getProcessingMethodName(params)
 
 	advancedMetrics := fmt.Sprintf("MPM: %.3f | BFC: %.3f | Skeleton: %.3f | Method: %s",
 		metrics.MPM(),
@@ -213,6 +234,15 @@ func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData
 	)
 
 	t.SetDetails(detailsText)
+}
+
+func getProcessingMethodName(params *OtsuParameters) string {
+	if params.MultiScaleProcessing {
+		return fmt.Sprintf("Multi-Scale (%d levels)", params.PyramidLevels)
+	} else if params.RegionAdaptiveThresholding {
+		return fmt.Sprintf("Region Adaptive (%dx%d grid)", params.RegionGridSize, params.RegionGridSize)
+	}
+	return "Single Scale"
 }
 
 func (t *Toolbar) getPreprocessingDescription(params *OtsuParameters) string {

@@ -58,7 +58,6 @@ func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result goc
 		return
 	}
 
-	// Calculate skeleton overlap
 	intersection := gocv.NewMat()
 	defer intersection.Close()
 	gocv.BitwiseAnd(gtSkeleton, resSkeleton, &intersection)
@@ -67,15 +66,23 @@ func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result goc
 	defer unionMat.Close()
 	gocv.BitwiseOr(gtSkeleton, resSkeleton, &unionMat)
 
-	intersectionPixels := gocv.CountNonZero(intersection)
-	unionPixels := gocv.CountNonZero(unionMat)
+	intersectionPixels, err := safeCountNonZero(intersection, "skeleton intersection")
+	if err != nil {
+		m.skeletonValue = 0.0
+		return
+	}
+
+	unionPixels, err := safeCountNonZero(unionMat, "skeleton union")
+	if err != nil {
+		m.skeletonValue = 0.0
+		return
+	}
 
 	if unionPixels == 0 {
 		m.skeletonValue = 0.0
 		return
 	}
 
-	// Jaccard similarity index
 	m.skeletonValue = float64(intersectionPixels) / float64(unionPixels)
 }
 
@@ -84,19 +91,24 @@ func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
 		return gocv.NewMat()
 	}
 
-	// Convert to binary if not already
+	var gray gocv.Mat
+	if src.Channels() > 1 {
+		gray = gocv.NewMat()
+		defer gray.Close()
+		gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
+	} else {
+		gray = src
+	}
+
 	binary := gocv.NewMat()
-	gocv.Threshold(src, &binary, 127, 255, gocv.ThresholdBinary)
+	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
 
-	// Apply morphological skeletonization using iterative thinning
-	skeleton := gocv.NewMat()
-	temp := gocv.NewMat()
-	defer temp.Close()
-
-	// Initialize skeleton as zeros
-	skeleton = gocv.NewMatWithSize(src.Rows(), src.Cols(), gocv.MatTypeCV8UC1)
+	skeleton := gocv.NewMatWithSize(gray.Rows(), gray.Cols(), gocv.MatTypeCV8UC1)
 	zeros := gocv.NewScalar(0, 0, 0, 0)
 	skeleton.SetTo(zeros)
+
+	temp := gocv.NewMat()
+	defer temp.Close()
 
 	element := gocv.GetStructuringElement(gocv.MorphCross, image.Point{X: 3, Y: 3})
 	defer element.Close()
@@ -108,7 +120,8 @@ func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
 		gocv.BitwiseOr(skeleton, temp, &skeleton)
 		gocv.MorphologyEx(binary, &binary, gocv.MorphErode, element)
 
-		if gocv.CountNonZero(binary) == 0 {
+		nonZeroCount, err := safeCountNonZero(binary, "skeleton iteration")
+		if err != nil || nonZeroCount == 0 {
 			break
 		}
 	}

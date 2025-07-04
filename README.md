@@ -48,6 +48,14 @@ go run cmd/quality_check/main.go format
 ./build/otsu-obliterator
 ```
 
+### Debug Mode
+
+Enable debug logging to troubleshoot issues:
+
+```bash
+go run . 2>&1 | grep -E "(DEBUG|ERROR)"
+```
+
 ## Features
 
 ### Processing Methods
