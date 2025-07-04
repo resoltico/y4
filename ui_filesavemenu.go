@@ -25,7 +25,6 @@ type ImageFormat struct {
 var SupportedFormats = []ImageFormat{
 	{"PNG", ".png", "image/png"},
 	{"JPEG", ".jpg", "image/jpeg"},
-	{"JPEG", ".jpeg", "image/jpeg"},
 }
 
 func NewFileSaveMenu(window fyne.Window) *FileSaveMenu {
@@ -40,7 +39,8 @@ func (fsm *FileSaveMenu) ShowSaveDialog(imageData *ImageData, callback func(fyne
 		return
 	}
 
-	formatSelect := widget.NewSelect([]string{"PNG", "JPEG"}, nil)
+	formatOptions := []string{"PNG", "JPEG"}
+	formatSelect := widget.NewSelect(formatOptions, nil)
 	formatSelect.SetSelected("PNG")
 
 	qualitySlider := widget.NewSlider(1, 100)

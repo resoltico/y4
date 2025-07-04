@@ -18,6 +18,7 @@ type Toolbar struct {
 	processButton *widget.Button
 	statusLabel   *widget.Label
 	metricsLabel  *widget.Label
+	fileSaveMenu  *FileSaveMenu
 }
 
 func NewToolbar(app *Application) *Toolbar {
@@ -27,6 +28,7 @@ func NewToolbar(app *Application) *Toolbar {
 
 	t.createButtons()
 	t.createLabels()
+	t.fileSaveMenu = NewFileSaveMenu(app.window)
 	t.buildLayout()
 
 	return t
@@ -91,23 +93,19 @@ func (t *Toolbar) handleSaveImage() {
 		return
 	}
 
-	dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
-		if err != nil || writer == nil {
-			return
-		}
-		defer writer.Close()
+	t.SetStatus("Preparing save...")
 
-		t.SetStatus("Saving image...")
-
-		saveErr := SaveImageToWriter(writer, processedData)
-		if saveErr != nil {
-			dialog.ShowError(saveErr, t.app.window)
+	t.fileSaveMenu.ShowSaveDialog(processedData, func(writer fyne.URIWriteCloser, err error) {
+		if err != nil {
+			dialog.ShowError(err, t.app.window)
 			t.SetStatus("Save failed")
 			return
 		}
 
-		t.SetStatus("Image saved")
-	}, t.app.window)
+		if writer != nil {
+			t.SetStatus("Image saved")
+		}
+	})
 }
 
 func (t *Toolbar) handleProcessImage() {

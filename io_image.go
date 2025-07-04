@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	_ "image/jpeg"
 	"image/png"
-	_ "image/png"
 	"io"
 	"path/filepath"
 	"strings"
@@ -56,11 +54,7 @@ func SaveImageToWriter(writer fyne.URIWriteCloser, imageData *ImageData) error {
 		return fmt.Errorf("no image data to save")
 	}
 
-	img, ok := imageData.Image.(image.Image)
-	if !ok {
-		return fmt.Errorf("image data contains invalid image")
-	}
-
+	img := imageData.Image
 	ext := strings.ToLower(writer.URI().Extension())
 
 	var err error
@@ -82,18 +76,10 @@ func SaveImageToWriter(writer fyne.URIWriteCloser, imageData *ImageData) error {
 
 func determineImageFormat(uriExtension, stdLibFormat string) string {
 	switch uriExtension {
-	case ".tiff", ".tif":
-		return "tiff"
 	case ".jpg", ".jpeg":
 		return "jpeg"
 	case ".png":
 		return "png"
-	case ".bmp":
-		return "bmp"
-	case ".gif":
-		return "gif"
-	case ".webp":
-		return "webp"
 	default:
 		if stdLibFormat != "" {
 			return stdLibFormat

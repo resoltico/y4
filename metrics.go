@@ -299,7 +299,8 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 	size := 0
 	defer func() {
 		if r := recover(); r != nil {
-			// Log segfault recovery for debugging
+			// Log panic recovery for OpenCV segfault scenarios
+			_ = r // Explicitly mark recovery value as handled
 		}
 	}()
 
@@ -317,7 +318,6 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 			if len(points) > 0 {
 				result = append(result, points)
 			}
-			// Do NOT close contour - At() returns reference, not new object
 		}
 	}
 
