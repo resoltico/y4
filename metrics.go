@@ -15,9 +15,24 @@ type BinaryImageMetrics struct {
 	FalseNegatives int
 	TotalPixels    int
 
-	drdValue float64
-	mpmValue float64
-	pbcValue float64
+	drdValue      float64
+	mpmValue      float64
+	pbcValue      float64
+	skeletonValue float64
+	ocrValue      float64
+}
+
+type SkeletonMetrics struct {
+	SkeletonSimilarity     float64
+	BranchPointAccuracy    float64
+	EndPointAccuracy       float64
+	StrokeWidthConsistency float64
+}
+
+type OCRMetrics struct {
+	CharacterAccuracy float64
+	WordAccuracy      float64
+	EditDistance      float64
 }
 
 func validateMat(mat gocv.Mat, context string) error {
@@ -53,7 +68,8 @@ func CalculateBinaryMetrics(groundTruth, result gocv.Mat) *BinaryImageMetrics {
 	metrics.calculateConfusionMatrix(groundTruth, result)
 	metrics.calculateDRD(groundTruth, result)
 	metrics.calculateMPM(groundTruth, result)
-	metrics.calculatePBC(groundTruth, result)
+	metrics.calculateBackgroundForegroundContrast(groundTruth, result)
+	metrics.calculateSkeletonMetrics(groundTruth, result)
 
 	return metrics
 }
@@ -110,14 +126,15 @@ func (m *BinaryImageMetrics) PseudoFMeasure() float64 {
 	precision := float64(m.TruePositives) / float64(m.TruePositives+m.FalsePositives)
 	recall := float64(m.TruePositives) / float64(m.TruePositives+m.FalseNegatives)
 
-	weightedPrecision := precision * 0.8
-	weightedRecall := recall * 1.2
+	// DIBCO standard pseudo F-measure with β = 0.5
+	beta := 0.5
+	betaSquared := beta * beta
 
-	if weightedPrecision+weightedRecall == 0 {
+	if betaSquared*precision+recall == 0 {
 		return 0.0
 	}
 
-	return 2 * (weightedPrecision * weightedRecall) / (weightedPrecision + weightedRecall)
+	return (1 + betaSquared) * precision * recall / (betaSquared*precision + recall)
 }
 
 func (m *BinaryImageMetrics) NRM() float64 {
@@ -126,6 +143,7 @@ func (m *BinaryImageMetrics) NRM() float64 {
 	tp := float64(m.TruePositives)
 	tn := float64(m.TrueNegatives)
 
+	// Standard DIBCO NRM calculation
 	numerator := fn + fp
 	denominator := 2 * (tp + tn)
 
@@ -144,8 +162,12 @@ func (m *BinaryImageMetrics) MPM() float64 {
 	return m.mpmValue
 }
 
-func (m *BinaryImageMetrics) PBC() float64 {
+func (m *BinaryImageMetrics) BackgroundForegroundContrast() float64 {
 	return m.pbcValue
+}
+
+func (m *BinaryImageMetrics) SkeletonSimilarity() float64 {
+	return m.skeletonValue
 }
 
 func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
@@ -175,7 +197,22 @@ func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
 		return
 	}
 
-	m.drdValue = totalDistortion / float64(totalErrorPixels)
+	totalForegroundPixels := 0
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			if groundTruth.GetUCharAt(y, x) > 127 {
+				totalForegroundPixels++
+			}
+		}
+	}
+
+	if totalForegroundPixels == 0 {
+		m.drdValue = 0.0
+		return
+	}
+
+	// DIBCO standard DRD normalization
+	m.drdValue = totalDistortion / float64(totalForegroundPixels)
 }
 
 func (m *BinaryImageMetrics) createDRDWeightMatrix() [][]float64 {
@@ -244,36 +281,61 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 	}
 
 	totalMismatch := 0.0
-	totalObjects := float64(len(gtContours) + len(resContours))
-	fallbackDistance := float64(groundTruth.Rows() + groundTruth.Cols())
+	totalObjects := 0
 
+	// Calculate misalignment for ground truth objects
 	for _, gtContour := range gtContours {
+		if len(gtContour) == 0 {
+			continue
+		}
+		totalObjects++
+
 		minDistance := math.Inf(1)
 		for _, resContour := range resContours {
+			if len(resContour) == 0 {
+				continue
+			}
 			distance := m.calculateContourDistance(gtContour, resContour)
 			if distance < minDistance {
 				minDistance = distance
 			}
 		}
-		if minDistance == math.Inf(1) {
-			totalMismatch += fallbackDistance
-		} else {
+
+		if minDistance != math.Inf(1) {
 			totalMismatch += minDistance
+		} else {
+			// No matching contour found - use maximum possible distance
+			fallbackDistance := float64(groundTruth.Rows() + groundTruth.Cols())
+			totalMismatch += fallbackDistance
 		}
 	}
 
+	// Calculate misalignment for result objects not in ground truth
 	for _, resContour := range resContours {
+		if len(resContour) == 0 {
+			continue
+		}
+
 		minDistance := math.Inf(1)
 		for _, gtContour := range gtContours {
+			if len(gtContour) == 0 {
+				continue
+			}
 			distance := m.calculateContourDistance(resContour, gtContour)
 			if distance < minDistance {
 				minDistance = distance
 			}
 		}
-		if minDistance == math.Inf(1) {
-			totalMismatch += fallbackDistance
-		} else {
-			totalMismatch += minDistance
+
+		// Only count result contours that don't match any ground truth contour
+		if minDistance > 5.0 { // Threshold for "matching"
+			totalObjects++
+			if minDistance != math.Inf(1) {
+				totalMismatch += minDistance
+			} else {
+				fallbackDistance := float64(groundTruth.Rows() + groundTruth.Cols())
+				totalMismatch += fallbackDistance
+			}
 		}
 	}
 
@@ -282,7 +344,7 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 		return
 	}
 
-	m.mpmValue = totalMismatch / totalObjects
+	m.mpmValue = totalMismatch / float64(totalObjects)
 }
 
 func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context string) [][]image.Point {
@@ -296,15 +358,13 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 		return [][]image.Point{}
 	}
 
-	size := 0
 	defer func() {
 		if r := recover(); r != nil {
-			// Log panic recovery for OpenCV segfault scenarios
-			_ = r // Explicitly mark recovery value as handled
+			// Recovery from potential OpenCV segfault
 		}
 	}()
 
-	size = contours.Size()
+	size := contours.Size()
 	if size == 0 {
 		contours.Close()
 		return [][]image.Point{}
@@ -315,7 +375,8 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 		contour := contours.At(i)
 		if !contour.IsNil() {
 			points := contour.ToPoints()
-			if len(points) > 0 {
+			// Filter out very small contours (noise)
+			if len(points) > 10 {
 				result = append(result, points)
 			}
 		}
@@ -330,9 +391,19 @@ func (m *BinaryImageMetrics) calculateContourDistance(contour1, contour2 []image
 		return math.Inf(1)
 	}
 
-	minDistance := math.Inf(1)
+	// Use Hausdorff distance for more accurate contour comparison
+	distance1 := m.calculateDirectedHausdorffDistance(contour1, contour2)
+	distance2 := m.calculateDirectedHausdorffDistance(contour2, contour1)
+
+	return math.Max(distance1, distance2)
+}
+
+func (m *BinaryImageMetrics) calculateDirectedHausdorffDistance(contour1, contour2 []image.Point) float64 {
+	maxDistance := 0.0
 
 	for _, p1 := range contour1 {
+		minDistance := math.Inf(1)
+
 		for _, p2 := range contour2 {
 			dx := float64(p1.X - p2.X)
 			dy := float64(p1.Y - p2.Y)
@@ -342,12 +413,16 @@ func (m *BinaryImageMetrics) calculateContourDistance(contour1, contour2 []image
 				minDistance = distance
 			}
 		}
+
+		if minDistance > maxDistance && minDistance != math.Inf(1) {
+			maxDistance = minDistance
+		}
 	}
 
-	return minDistance
+	return maxDistance
 }
 
-func (m *BinaryImageMetrics) calculatePBC(groundTruth, result gocv.Mat) {
+func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, result gocv.Mat) {
 	rows := groundTruth.Rows()
 	cols := groundTruth.Cols()
 

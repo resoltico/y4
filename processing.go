@@ -12,6 +12,7 @@ import (
 type ProcessingEngine struct {
 	originalImage  *ImageData
 	processedImage *ImageData
+	integralImage  gocv.Mat
 }
 
 type ImageData struct {
@@ -24,15 +25,28 @@ type ImageData struct {
 }
 
 type OtsuParameters struct {
-	WindowSize               int
-	HistogramBins            int
-	SmoothingStrength        float64
-	EdgePreservation         bool
-	NoiseRobustness          bool
-	GaussianPreprocessing    bool
-	UseLogHistogram          bool
-	NormalizeHistogram       bool
-	ApplyContrastEnhancement bool
+	WindowSize                 int
+	HistogramBins              int
+	SmoothingStrength          float64
+	EdgePreservation           bool
+	NoiseRobustness            bool
+	GaussianPreprocessing      bool
+	UseLogHistogram            bool
+	NormalizeHistogram         bool
+	ApplyContrastEnhancement   bool
+	AdaptiveWindowSizing       bool
+	MultiScaleProcessing       bool
+	PyramidLevels              int
+	NeighborhoodType           string
+	InterpolationMethod        string
+	MorphologicalPostProcess   bool
+	MorphologicalKernelSize    int
+	HomomorphicFiltering       bool
+	AnisotropicDiffusion       bool
+	DiffusionIterations        int
+	DiffusionKappa             float64
+	RegionAdaptiveThresholding bool
+	RegionGridSize             int
 }
 
 func NewProcessingEngine() *ProcessingEngine {
@@ -41,6 +55,7 @@ func NewProcessingEngine() *ProcessingEngine {
 
 func (pe *ProcessingEngine) SetOriginalImage(data *ImageData) {
 	pe.originalImage = data
+	pe.buildIntegralImage()
 }
 
 func (pe *ProcessingEngine) GetOriginalImage() *ImageData {
@@ -49,6 +64,23 @@ func (pe *ProcessingEngine) GetOriginalImage() *ImageData {
 
 func (pe *ProcessingEngine) GetProcessedImage() *ImageData {
 	return pe.processedImage
+}
+
+func (pe *ProcessingEngine) buildIntegralImage() {
+	if pe.originalImage == nil {
+		return
+	}
+
+	gray := pe.convertToGrayscale(pe.originalImage.Mat)
+	defer gray.Close()
+
+	pe.integralImage = gocv.NewMat()
+	sqsum := gocv.NewMat()
+	defer sqsum.Close()
+	tilted := gocv.NewMat()
+	defer tilted.Close()
+
+	gocv.Integral(gray, &pe.integralImage, &sqsum, &tilted)
 }
 
 func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *BinaryImageMetrics, error) {
@@ -60,57 +92,48 @@ func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *B
 		return nil, nil, fmt.Errorf("processing engine: %w", err)
 	}
 
-	// Log dimensions for debugging
-	rows, cols := pe.originalImage.Mat.Rows(), pe.originalImage.Mat.Cols()
-	fmt.Printf("DEBUG: Processing %dx%d image\n", rows, cols)
-
 	gray := pe.convertToGrayscale(pe.originalImage.Mat)
 	defer gray.Close()
 
 	working := gray
+	if params.HomomorphicFiltering {
+		homomorphic := pe.applyHomomorphicFiltering(gray)
+		defer homomorphic.Close()
+		working = homomorphic
+	}
+
+	if params.AnisotropicDiffusion {
+		diffused := pe.applyAnisotropicDiffusion(working, params.DiffusionIterations, params.DiffusionKappa)
+		defer diffused.Close()
+		working = diffused
+	}
+
 	if params.GaussianPreprocessing {
-		blurred := pe.applyGaussianBlur(gray, params.SmoothingStrength)
+		blurred := pe.applyGaussianBlur(working, params.SmoothingStrength)
 		defer blurred.Close()
 		working = blurred
 	}
 
 	if params.ApplyContrastEnhancement {
-		enhanced := pe.applyCLAHE(working)
+		enhanced := pe.applyAdaptiveContrastEnhancement(working)
 		defer enhanced.Close()
 		working = enhanced
 	}
 
-	neighborhood := pe.calculateNeighborhoodMean(working, params.WindowSize)
-	defer neighborhood.Close()
-
-	histBins := params.HistogramBins
-	if histBins == 0 {
-		histBins = pe.calculateHistogramBins(working)
+	var result gocv.Mat
+	if params.MultiScaleProcessing {
+		result = pe.processMultiScale(working, params)
+	} else if params.RegionAdaptiveThresholding {
+		result = pe.processRegionAdaptive(working, params)
+	} else {
+		result = pe.processSingleScale(working, params)
 	}
-
-	histogram := pe.build2DHistogram(working, neighborhood, histBins)
-
-	if params.UseLogHistogram {
-		pe.applyLogScaling(histogram)
-	}
-
-	if params.NormalizeHistogram {
-		pe.normalizeHistogram(histogram)
-	}
-
-	if params.SmoothingStrength > 0 {
-		pe.smoothHistogram(histogram, params.SmoothingStrength)
-	}
-
-	threshold := pe.find2DOtsuThreshold(histogram)
-
-	result := pe.applyThreshold(working, neighborhood, threshold, histBins)
 	defer result.Close()
 
-	if params.NoiseRobustness {
-		cleaned := pe.applyNoiseReduction(result)
-		defer cleaned.Close()
-		result = cleaned
+	if params.MorphologicalPostProcess {
+		morphed := pe.applyMorphologicalPostProcessing(result, params.MorphologicalKernelSize)
+		defer morphed.Close()
+		result = morphed
 	}
 
 	resultImage := pe.matToImage(result)
@@ -134,6 +157,213 @@ func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *B
 	return processedData, metrics, nil
 }
 
+func (pe *ProcessingEngine) processSingleScale(src gocv.Mat, params *OtsuParameters) gocv.Mat {
+	windowSize := params.WindowSize
+	if params.AdaptiveWindowSizing {
+		windowSize = pe.calculateAdaptiveWindowSize(src)
+	}
+
+	neighborhood := pe.calculateNeighborhood(src, windowSize, params.NeighborhoodType)
+	defer neighborhood.Close()
+
+	histBins := params.HistogramBins
+	if histBins == 0 {
+		histBins = pe.calculateHistogramBins(src)
+	}
+
+	histogram := pe.build2DHistogram(src, neighborhood, histBins)
+
+	if params.UseLogHistogram {
+		pe.applyLogScaling(histogram)
+	}
+
+	if params.NormalizeHistogram {
+		pe.normalizeHistogram(histogram)
+	}
+
+	if params.SmoothingStrength > 0 {
+		pe.smoothHistogram(histogram, params.SmoothingStrength)
+	}
+
+	threshold := pe.find2DOtsuThresholdInteger(histogram)
+	return pe.applyThreshold(src, neighborhood, threshold, histBins)
+}
+
+func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParameters) gocv.Mat {
+	levels := params.PyramidLevels
+	if levels <= 0 {
+		levels = 3
+	}
+
+	pyramid := make([]gocv.Mat, levels+1)
+	pyramid[0] = src.Clone()
+
+	for i := 1; i <= levels; i++ {
+		pyramid[i] = gocv.NewMat()
+		gocv.PyrDown(pyramid[i-1], &pyramid[i], image.Point{}, gocv.BorderDefault)
+	}
+
+	defer func() {
+		for i := 1; i <= levels; i++ {
+			pyramid[i].Close()
+		}
+	}()
+
+	results := make([]gocv.Mat, levels+1)
+	for i := 0; i <= levels; i++ {
+		scaleParams := *params
+		scaleParams.MultiScaleProcessing = false
+		scaleParams.WindowSize = max(3, params.WindowSize/(1<<i))
+		results[i] = pe.processSingleScale(pyramid[i], &scaleParams)
+	}
+
+	defer func() {
+		for i := 1; i <= levels; i++ {
+			results[i].Close()
+		}
+	}()
+
+	for i := levels - 1; i >= 0; i-- {
+		upsampled := gocv.NewMat()
+		gocv.PyrUp(results[i+1], &upsampled, image.Point{}, gocv.BorderDefault)
+
+		combined := gocv.NewMat()
+		gocv.BitwiseOr(results[i], upsampled, &combined)
+
+		results[i].Close()
+		upsampled.Close()
+		results[i] = combined
+	}
+
+	return results[0]
+}
+
+func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuParameters) gocv.Mat {
+	rows, cols := src.Rows(), src.Cols()
+	gridSize := params.RegionGridSize
+	if gridSize <= 0 {
+		gridSize = max(rows/8, cols/8)
+	}
+
+	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
+
+	for y := 0; y < rows; y += gridSize {
+		for x := 0; x < cols; x += gridSize {
+			endY := min(y+gridSize, rows)
+			endX := min(x+gridSize, cols)
+
+			roi := src.Region(image.Rect(x, y, endX, endY))
+			regionParams := *params
+			regionParams.RegionAdaptiveThresholding = false
+			regionResult := pe.processSingleScale(roi, &regionParams)
+
+			regionResult.CopyTo(&result.RowRange(y, endY).ColRange(x, endX))
+
+			roi.Close()
+			regionResult.Close()
+		}
+	}
+
+	return result
+}
+
+func (pe *ProcessingEngine) calculateAdaptiveWindowSize(src gocv.Mat) int {
+	rows, cols := src.Rows(), src.Cols()
+
+	var intensity float64
+	totalPixels := rows * cols
+
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			intensity += float64(src.GetUCharAt(y, x))
+		}
+	}
+
+	meanIntensity := intensity / float64(totalPixels)
+
+	var variance float64
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			diff := float64(src.GetUCharAt(y, x)) - meanIntensity
+			variance += diff * diff
+		}
+	}
+	variance /= float64(totalPixels)
+
+	baseWindow := 7
+	varianceScale := variance / 1000.0
+	adaptiveWindow := int(float64(baseWindow) * (1.0 + varianceScale))
+
+	if adaptiveWindow%2 == 0 {
+		adaptiveWindow++
+	}
+
+	return max(3, min(adaptiveWindow, 21))
+}
+
+func (pe *ProcessingEngine) calculateNeighborhood(src gocv.Mat, windowSize int, neighborhoodType string) gocv.Mat {
+	switch neighborhoodType {
+	case "circular":
+		return pe.calculateCircularNeighborhood(src, windowSize)
+	case "distance_weighted":
+		return pe.calculateDistanceWeightedNeighborhood(src, windowSize)
+	default:
+		return pe.calculateRectangularNeighborhood(src, windowSize)
+	}
+}
+
+func (pe *ProcessingEngine) calculateRectangularNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
+	dst := gocv.NewMat()
+	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Point{X: windowSize, Y: windowSize})
+	defer kernel.Close()
+	gocv.MorphologyEx(src, &dst, gocv.MorphOpen, kernel)
+	return dst
+}
+
+func (pe *ProcessingEngine) calculateCircularNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
+	dst := gocv.NewMat()
+	kernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Point{X: windowSize, Y: windowSize})
+	defer kernel.Close()
+	gocv.MorphologyEx(src, &dst, gocv.MorphOpen, kernel)
+	return dst
+}
+
+func (pe *ProcessingEngine) calculateDistanceWeightedNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
+	rows, cols := src.Rows(), src.Cols()
+	dst := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
+
+	radius := windowSize / 2
+
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			var weightedSum, totalWeight float64
+
+			for dy := -radius; dy <= radius; dy++ {
+				for dx := -radius; dx <= radius; dx++ {
+					ny, nx := y+dy, x+dx
+					if ny >= 0 && ny < rows && nx >= 0 && nx < cols {
+						distance := math.Sqrt(float64(dx*dx + dy*dy))
+						if distance <= float64(radius) {
+							weight := 1.0 / (1.0 + distance)
+							pixel := float64(src.GetUCharAt(ny, nx))
+							weightedSum += pixel * weight
+							totalWeight += weight
+						}
+					}
+				}
+			}
+
+			if totalWeight > 0 {
+				dst.SetUCharAt(y, x, uint8(weightedSum/totalWeight))
+			} else {
+				dst.SetUCharAt(y, x, src.GetUCharAt(y, x))
+			}
+		}
+	}
+
+	return dst
+}
+
 func (pe *ProcessingEngine) convertToGrayscale(src gocv.Mat) gocv.Mat {
 	if src.Channels() == 1 {
 		return src.Clone()
@@ -154,20 +384,107 @@ func (pe *ProcessingEngine) applyGaussianBlur(src gocv.Mat, sigma float64) gocv.
 	return dst
 }
 
-func (pe *ProcessingEngine) applyCLAHE(src gocv.Mat) gocv.Mat {
-	dst := gocv.NewMat()
-	clahe := gocv.NewCLAHE()
+func (pe *ProcessingEngine) applyAdaptiveContrastEnhancement(src gocv.Mat) gocv.Mat {
+	clahe := gocv.NewCLAHEWithParams(2.0, image.Point{X: 8, Y: 8})
 	defer clahe.Close()
+
+	dst := gocv.NewMat()
 	clahe.Apply(src, &dst)
 	return dst
 }
 
-func (pe *ProcessingEngine) calculateNeighborhoodMean(src gocv.Mat, windowSize int) gocv.Mat {
-	dst := gocv.NewMat()
-	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Point{X: windowSize, Y: windowSize})
-	defer kernel.Close()
-	gocv.MorphologyEx(src, &dst, gocv.MorphOpen, kernel)
-	return dst
+func (pe *ProcessingEngine) applyHomomorphicFiltering(src gocv.Mat) gocv.Mat {
+	rows, cols := src.Rows(), src.Cols()
+
+	floatMat := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
+	defer floatMat.Close()
+
+	src.ConvertTo(&floatMat, gocv.MatTypeCV32F)
+
+	logMat := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
+	defer logMat.Close()
+
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			val := floatMat.GetFloatAt(y, x)
+			if val > 0 {
+				logMat.SetFloatAt(y, x, float32(math.Log(float64(val)+1)))
+			}
+		}
+	}
+
+	highPassKernel := gocv.NewMatWithSize(5, 5, gocv.MatTypeCV32F)
+	defer highPassKernel.Close()
+
+	for y := 0; y < 5; y++ {
+		for x := 0; x < 5; x++ {
+			if y == 2 && x == 2 {
+				highPassKernel.SetFloatAt(y, x, 24)
+			} else {
+				highPassKernel.SetFloatAt(y, x, -1)
+			}
+		}
+	}
+
+	filtered := gocv.NewMat()
+	defer filtered.Close()
+	gocv.Filter2D(logMat, &filtered, -1, highPassKernel, image.Point{X: -1, Y: -1}, 0, gocv.BorderDefault)
+
+	expMat := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
+	defer expMat.Close()
+
+	for y := 0; y < rows; y++ {
+		for x := 0; x < cols; x++ {
+			val := filtered.GetFloatAt(y, x)
+			expMat.SetFloatAt(y, x, float32(math.Exp(float64(val))))
+		}
+	}
+
+	result := gocv.NewMat()
+	expMat.ConvertTo(&result, gocv.MatTypeCV8U)
+	return result
+}
+
+func (pe *ProcessingEngine) applyAnisotropicDiffusion(src gocv.Mat, iterations int, kappa float64) gocv.Mat {
+	rows, cols := src.Rows(), src.Cols()
+
+	current := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
+	defer current.Close()
+	src.ConvertTo(&current, gocv.MatTypeCV32F)
+
+	next := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
+	defer next.Close()
+
+	for iter := 0; iter < iterations; iter++ {
+		for y := 1; y < rows-1; y++ {
+			for x := 1; x < cols-1; x++ {
+				center := current.GetFloatAt(y, x)
+				north := current.GetFloatAt(y-1, x)
+				south := current.GetFloatAt(y+1, x)
+				east := current.GetFloatAt(y, x+1)
+				west := current.GetFloatAt(y, x-1)
+
+				gradN := north - center
+				gradS := south - center
+				gradE := east - center
+				gradW := west - center
+
+				cN := math.Exp(-math.Pow(float64(gradN)/kappa, 2))
+				cS := math.Exp(-math.Pow(float64(gradS)/kappa, 2))
+				cE := math.Exp(-math.Pow(float64(gradE)/kappa, 2))
+				cW := math.Exp(-math.Pow(float64(gradW)/kappa, 2))
+
+				newVal := center + 0.25*(float32(cN)*gradN+float32(cS)*gradS+float32(cE)*gradE+float32(cW)*gradW)
+				next.SetFloatAt(y, x, float32(newVal))
+			}
+		}
+
+		current, next = next, current
+	}
+
+	result := gocv.NewMat()
+	current.ConvertTo(&result, gocv.MatTypeCV8U)
+	return result
 }
 
 func (pe *ProcessingEngine) calculateHistogramBins(src gocv.Mat) int {
@@ -175,14 +492,12 @@ func (pe *ProcessingEngine) calculateHistogramBins(src gocv.Mat) int {
 	cols := src.Cols()
 	totalPixels := rows * cols
 
-	baseBins := 64
 	if totalPixels > 1000000 {
-		baseBins = 128
+		return 128
 	} else if totalPixels < 100000 {
-		baseBins = 32
+		return 32
 	}
-
-	return baseBins
+	return 64
 }
 
 func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBins int) [][]float64 {
@@ -306,9 +621,9 @@ func (pe *ProcessingEngine) smoothHistogram(histogram [][]float64, sigma float64
 	}
 }
 
-func (pe *ProcessingEngine) find2DOtsuThreshold(histogram [][]float64) [2]float64 {
+func (pe *ProcessingEngine) find2DOtsuThresholdInteger(histogram [][]float64) [2]int {
 	histBins := len(histogram)
-	bestThreshold := [2]float64{float64(histBins) / 2.0, float64(histBins) / 2.0}
+	bestThreshold := [2]int{histBins / 2, histBins / 2}
 	maxVariance := 0.0
 
 	totalSum := 0.0
@@ -325,38 +640,33 @@ func (pe *ProcessingEngine) find2DOtsuThreshold(histogram [][]float64) [2]float6
 		return bestThreshold
 	}
 
-	subPixelStep := 0.1
-
-	for t := 1.0; t < float64(histBins-1); t += subPixelStep {
-		variance := pe.calculateVarianceForThresholds(histogram, t, t, totalSum, totalCount)
-		if variance > maxVariance {
-			maxVariance = variance
-			bestThreshold = [2]float64{t, t}
+	for t1 := 1; t1 < histBins-1; t1++ {
+		for t2 := 1; t2 < histBins-1; t2++ {
+			variance := pe.calculateVarianceForIntegerThresholds(histogram, t1, t2, totalSum, totalCount)
+			if variance > maxVariance {
+				maxVariance = variance
+				bestThreshold = [2]int{t1, t2}
+			}
 		}
 	}
 
 	return bestThreshold
 }
 
-func (pe *ProcessingEngine) calculateVarianceForThresholds(histogram [][]float64, t1, t2, totalSum, totalCount float64) float64 {
+func (pe *ProcessingEngine) calculateVarianceForIntegerThresholds(histogram [][]float64, t1, t2 int, totalSum, totalCount float64) float64 {
 	histBins := len(histogram)
 	var w0, w1, sum0, sum1 float64
 
-	t1Int := int(t1)
-	t2Int := int(t2)
-
-	for i := 0; i <= t1Int; i++ {
-		for j := 0; j <= t2Int; j++ {
-			if float64(i) <= t1 && float64(j) <= t2 {
-				weight := histogram[i][j]
-				w0 += weight
-				sum0 += float64(i*histBins+j) * weight
-			}
+	for i := 0; i <= t1; i++ {
+		for j := 0; j <= t2; j++ {
+			weight := histogram[i][j]
+			w0 += weight
+			sum0 += float64(i*histBins+j) * weight
 		}
 	}
 
-	for i := t1Int + 1; i < histBins; i++ {
-		for j := t2Int + 1; j < histBins; j++ {
+	for i := t1 + 1; i < histBins; i++ {
+		for j := t2 + 1; j < histBins; j++ {
 			weight := histogram[i][j]
 			w1 += weight
 			sum1 += float64(i*histBins+j) * weight
@@ -373,7 +683,7 @@ func (pe *ProcessingEngine) calculateVarianceForThresholds(histogram [][]float64
 	return 0.0
 }
 
-func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold [2]float64, histBins int) gocv.Mat {
+func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold [2]int, histBins int) gocv.Mat {
 	result := gocv.NewMatWithSize(src.Rows(), src.Cols(), gocv.MatTypeCV8UC1)
 	binScale := float64(histBins-1) / 255.0
 
@@ -382,8 +692,8 @@ func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold
 			pixelValue := src.GetUCharAt(y, x)
 			neighValue := neighborhood.GetUCharAt(y, x)
 
-			pixelBin := float64(pixelValue) * binScale
-			neighBin := float64(neighValue) * binScale
+			pixelBin := int(float64(pixelValue) * binScale)
+			neighBin := int(float64(neighValue) * binScale)
 
 			if pixelBin > threshold[0] && neighBin > threshold[1] {
 				result.SetUCharAt(y, x, 255)
@@ -396,16 +706,19 @@ func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold
 	return result
 }
 
-func (pe *ProcessingEngine) applyNoiseReduction(src gocv.Mat) gocv.Mat {
-	kernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Point{X: 3, Y: 3})
-	defer kernel.Close()
+func (pe *ProcessingEngine) applyMorphologicalPostProcessing(src gocv.Mat, kernelSize int) gocv.Mat {
+	openingKernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Point{X: kernelSize, Y: kernelSize})
+	defer openingKernel.Close()
 
 	opened := gocv.NewMat()
 	defer opened.Close()
-	gocv.MorphologyEx(src, &opened, gocv.MorphOpen, kernel)
+	gocv.MorphologyEx(src, &opened, gocv.MorphOpen, openingKernel)
+
+	closingKernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Point{X: kernelSize + 2, Y: kernelSize + 2})
+	defer closingKernel.Close()
 
 	result := gocv.NewMat()
-	gocv.MorphologyEx(opened, &result, gocv.MorphClose, kernel)
+	gocv.MorphologyEx(opened, &result, gocv.MorphClose, closingKernel)
 
 	return result
 }
@@ -423,4 +736,18 @@ func (pe *ProcessingEngine) matToImage(mat gocv.Mat) image.Image {
 	}
 
 	return img
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

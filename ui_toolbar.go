@@ -18,6 +18,7 @@ type Toolbar struct {
 	processButton *widget.Button
 	statusLabel   *widget.Label
 	metricsLabel  *widget.Label
+	detailsLabel  *widget.Label
 	fileSaveMenu  *FileSaveMenu
 }
 
@@ -50,15 +51,21 @@ func (t *Toolbar) createButtons() {
 func (t *Toolbar) createLabels() {
 	t.statusLabel = widget.NewLabel("Ready")
 	t.metricsLabel = widget.NewLabel("No metrics available")
+	t.detailsLabel = widget.NewLabel("Load an image to begin processing")
 }
 
 func (t *Toolbar) buildLayout() {
 	leftSection := container.NewHBox(t.loadButton, t.saveButton)
 	centerSection := container.NewHBox(t.processButton)
-	rightSection := container.NewVBox(t.statusLabel, t.metricsLabel)
+
+	metricsSection := container.NewVBox(
+		t.statusLabel,
+		t.metricsLabel,
+		t.detailsLabel,
+	)
 
 	t.container = container.NewBorder(
-		nil, nil, leftSection, rightSection, centerSection,
+		nil, nil, leftSection, metricsSection, centerSection,
 	)
 }
 
@@ -83,6 +90,8 @@ func (t *Toolbar) handleLoadImage() {
 			t.app.processing.SetOriginalImage(imageData)
 			t.processButton.Enable()
 			t.SetStatus("Image loaded")
+			t.SetDetails(fmt.Sprintf("Image: %dx%d pixels, %d channels, %s format",
+				imageData.Width, imageData.Height, imageData.Channels, imageData.Format))
 		})
 	}, t.app.window)
 }
@@ -133,13 +142,18 @@ func (t *Toolbar) handleProcessImage() {
 			t.app.imageViewer.SetProcessedImage(result.Image)
 			t.SetStatus("Processing complete")
 			t.SetMetrics(metrics)
+			t.SetProcessingDetails(params, result, metrics)
 			t.saveButton.Enable()
 		})
 	}()
 }
 
 func (t *Toolbar) SetStatus(status string) {
-	t.statusLabel.SetText(status)
+	t.statusLabel.SetText("Status: " + status)
+}
+
+func (t *Toolbar) SetDetails(details string) {
+	t.detailsLabel.SetText(details)
 }
 
 func (t *Toolbar) SetMetrics(metrics *BinaryImageMetrics) {
@@ -148,17 +162,87 @@ func (t *Toolbar) SetMetrics(metrics *BinaryImageMetrics) {
 		return
 	}
 
-	text := "F: %.3f | pF: %.3f | DRD: %.3f | MPM: %.3f | NRM: %.3f | PBC: %.3f"
-	t.metricsLabel.SetText(
-		fmt.Sprintf(text,
-			metrics.FMeasure(),
-			metrics.PseudoFMeasure(),
-			metrics.DRD(),
-			metrics.MPM(),
-			metrics.NRM(),
-			metrics.PBC(),
-		),
+	basicMetrics := fmt.Sprintf("F: %.3f | pF: %.3f | NRM: %.3f | DRD: %.3f",
+		metrics.FMeasure(),
+		metrics.PseudoFMeasure(),
+		metrics.NRM(),
+		metrics.DRD(),
 	)
+
+	t.metricsLabel.SetText(basicMetrics)
+}
+
+func (t *Toolbar) SetProcessingDetails(params *OtsuParameters, result *ImageData, metrics *BinaryImageMetrics) {
+	if params == nil || result == nil || metrics == nil {
+		return
+	}
+
+	processingMethod := "Single Scale"
+	if params.MultiScaleProcessing {
+		processingMethod = fmt.Sprintf("Multi-Scale (%d levels)", params.PyramidLevels)
+	} else if params.RegionAdaptiveThresholding {
+		processingMethod = fmt.Sprintf("Region Adaptive (%dx%d grid)", params.RegionGridSize, params.RegionGridSize)
+	}
+
+	advancedMetrics := fmt.Sprintf("MPM: %.3f | BFC: %.3f | Skeleton: %.3f | Method: %s",
+		metrics.MPM(),
+		metrics.BackgroundForegroundContrast(),
+		metrics.SkeletonSimilarity(),
+		processingMethod,
+	)
+
+	algorithmDetails := fmt.Sprintf("Window: %d | Bins: %d | Neighborhood: %s | Preprocessing: %s",
+		params.WindowSize,
+		params.HistogramBins,
+		params.NeighborhoodType,
+		t.getPreprocessingDescription(params),
+	)
+
+	confusionMatrix := fmt.Sprintf("TP: %d | TN: %d | FP: %d | FN: %d | Total: %d",
+		metrics.TruePositives,
+		metrics.TrueNegatives,
+		metrics.FalsePositives,
+		metrics.FalseNegatives,
+		metrics.TotalPixels,
+	)
+
+	detailsText := fmt.Sprintf("%s\n%s\n%s",
+		advancedMetrics,
+		algorithmDetails,
+		confusionMatrix,
+	)
+
+	t.SetDetails(detailsText)
+}
+
+func (t *Toolbar) getPreprocessingDescription(params *OtsuParameters) string {
+	var steps []string
+
+	if params.HomomorphicFiltering {
+		steps = append(steps, "Homomorphic")
+	}
+	if params.AnisotropicDiffusion {
+		steps = append(steps, fmt.Sprintf("Diffusion(%d)", params.DiffusionIterations))
+	}
+	if params.GaussianPreprocessing {
+		steps = append(steps, "Gaussian")
+	}
+	if params.ApplyContrastEnhancement {
+		steps = append(steps, "CLAHE")
+	}
+
+	if len(steps) == 0 {
+		return "None"
+	}
+
+	result := ""
+	for i, step := range steps {
+		if i > 0 {
+			result += "+"
+		}
+		result += step
+	}
+	return result
 }
 
 func (t *Toolbar) GetContainer() *fyne.Container {
