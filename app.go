@@ -238,7 +238,7 @@ func (a *Application) showDebugInfo() {
 
 The debug system provides monitoring and tracing capabilities.
 
-Use 'go run . 2>&1 | grep -E "(DEBUG|ERROR|WARN)"' to filter logs.
+Use 'go run . 2>&1 | grep -E "(DEBUG|ERROR|WARN)"' to filter logs.`
 
 	debugLabel := widget.NewLabel(debugText)
 	debugLabel.Wrapping = fyne.TextWrapWord
@@ -259,7 +259,6 @@ Use 'go run . 2>&1 | grep -E "(DEBUG|ERROR|WARN)"' to filter logs.
 	dialog.NewCustom("Debug Information", "Close", debugScroll, a.window).Show()
 }
 
-func (a *Application) Run() error {
+func (a *Application) ShowAndRun() {
 	a.window.ShowAndRun()
-	return nil
 }

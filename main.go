@@ -34,9 +34,7 @@ func main() {
 
 	setupSignalHandling(cancel)
 
-	if err := application.Run(); err != nil {
-		log.Fatalf("Application failed: %v", err)
-	}
+	application.ShowAndRun()
 }
 
 func setupSignalHandling(cancel context.CancelFunc) {
@@ -45,6 +43,7 @@ func setupSignalHandling(cancel context.CancelFunc) {
 
 	go func() {
 		<-sigChan
+		log.Println("Signal received, shutting down...")
 		cancel()
 	}()
 }

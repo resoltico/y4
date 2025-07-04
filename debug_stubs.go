@@ -13,11 +13,11 @@ type DebugSystem struct {
 }
 
 type DebugConfig struct {
-	LogLevel       slog.Level
-	EnableTracing  bool
-	EnableMonitor  bool
-	OutputFile     string
-	ConsoleOutput  bool
+	LogLevel      slog.Level
+	EnableTracing bool
+	EnableMonitor bool
+	OutputFile    string
+	ConsoleOutput bool
 }
 
 func InitDebugSystem(config DebugConfig) *DebugSystem {
