@@ -1,4 +1,4 @@
-[3:28:39 AM] % go run cmd/quality_check/main.go check
+[3:44:26 AM] % go run cmd/quality_check/main.go check
 Validating environment...
 ✓ Go version 1.24 matches requirement
 ✓ go.mod exists
@@ -16,62 +16,48 @@ Running core quality checks...
 Running external tools...
 ✗ staticcheck found issues:
 -: # otsu-obliterator
-./processing_timeout_wrapper.go:9:6: TimeoutConfig redeclared in this block
-	./processing_timeout.go:11:6: other declaration of TimeoutConfig
-./processing_timeout_wrapper.go:17:5: DefaultTimeouts redeclared in this block
-	./processing_timeout.go:19:5: other declaration of DefaultTimeouts
-./processing_timeout_wrapper.go:25:6: TimeoutError redeclared in this block
-	./processing_timeout.go:27:6: other declaration of TimeoutError
-./processing_timeout_wrapper.go:35:6: ProcessingResult redeclared in this block
-	./processing_timeout.go:37:6: other declaration of ProcessingResult
-./processing_timeout_wrapper.go:41:6: withProcessingTimeout redeclared in this block
-	./processing_timeout.go:43:6: other declaration of withProcessingTimeout
-./processing_validation.go:10:6: ValidationError redeclared in this block
-	./processing_neighborhood.go:10:6: other declaration of ValidationError
-./processing_validation.go:21:6: validateMat redeclared in this block
-	./processing_neighborhood.go:21:6: other declaration of validateMat
-./processing_validation.go:31:6: validateMatDimensions redeclared in this block
-	./processing_neighborhood.go:31:6: other declaration of validateMatDimensions
-./processing_validation.go:39:6: validateImageMat redeclared in this block
-	./processing_neighborhood.go:39:6: other declaration of validateImageMat
-./processing_validation.go:83:6: validateOtsuParameters redeclared in this block
-	./processing_neighborhood.go:83:6: other declaration of validateOtsuParameters
-./processing_validation.go:83:6: too many errors (compile)
+./processing_engine_split.go:11:6: ProcessingEngine redeclared in this block
+	./processing_engine.go:11:6: other declaration of ProcessingEngine
+./processing_engine_split.go:17:6: ImageData redeclared in this block
+	./processing_engine.go:17:6: other declaration of ImageData
+./processing_engine_split.go:26:6: OtsuParameters redeclared in this block
+	./processing_engine.go:26:6: other declaration of OtsuParameters
+./processing_engine_split.go:51:6: NewProcessingEngine redeclared in this block
+	./processing_engine.go:51:6: other declaration of NewProcessingEngine
+./processing_engine_split.go:55:29: method ProcessingEngine.SetOriginalImage already declared at ./processing_engine.go:55:29
+./processing_engine_split.go:60:29: method ProcessingEngine.GetOriginalImage already declared at ./processing_engine.go:60:29
+./processing_engine_split.go:64:29: method ProcessingEngine.GetProcessedImage already declared at ./processing_engine.go:64:29
+./processing_engine_split.go:68:29: method ProcessingEngine.buildIntegralImage already declared at ./processing_engine.go:68:29
+./processing_engine_utils.go:35:6: max redeclared in this block
+	./processing_engine.go:184:6: other declaration of max
+./processing_engine_utils.go:42:6: min redeclared in this block
+	./processing_engine.go:191:6: other declaration of min
+./processing_engine_split.go:68:29: too many errors (compile)
 ✗ Security vulnerabilities detected:
 govulncheck: loading packages: 
 There are errors with the provided package patterns:
 
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:9:6: TimeoutConfig redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:11:6: 	other declaration of TimeoutConfig
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:17:5: DefaultTimeouts redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:19:5: 	other declaration of DefaultTimeouts
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:25:6: TimeoutError redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:27:6: 	other declaration of TimeoutError
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:35:6: ProcessingResult redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:37:6: 	other declaration of ProcessingResult
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:41:6: withProcessingTimeout redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:43:6: 	other declaration of withProcessingTimeout
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:10:6: ValidationError redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:10:6: 	other declaration of ValidationError
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:21:6: validateMat redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:21:6: 	other declaration of validateMat
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:31:6: validateMatDimensions redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:31:6: 	other declaration of validateMatDimensions
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:39:6: validateImageMat redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:39:6: 	other declaration of validateImageMat
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:83:6: validateOtsuParameters redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:83:6: 	other declaration of validateOtsuParameters
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:152:6: validateContourData redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:152:6: 	other declaration of validateContourData
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:78:29: method ProcessingEngine.ProcessImageWithTimeout already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:80:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:99:29: method ProcessingEngine.calculateTimeout already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:101:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:121:29: method ProcessingEngine.processImageSafely already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:123:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_validation.go:17:28: method ValidationError.Error already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_neighborhood.go:17:28
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:31:25: method TimeoutError.Error already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout.go:33:25
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_methods.go:12:19: pe.calculateAdaptiveWindowSize undefined (type *ProcessingEngine has no field or method calculateAdaptiveWindowSize)
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_methods.go:15:21: pe.calculateNeighborhood undefined (type *ProcessingEngine has no field or method calculateNeighborhood)
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_methods.go:20:17: pe.calculateHistogramBins undefined (type *ProcessingEngine has no field or method calculateHistogramBins)
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_timeout_wrapper.go:152:13: undefined: gocv
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:11:6: ProcessingEngine redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:11:6: 	other declaration of ProcessingEngine
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:17:6: ImageData redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:17:6: 	other declaration of ImageData
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:26:6: OtsuParameters redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:26:6: 	other declaration of OtsuParameters
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:51:6: NewProcessingEngine redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:51:6: 	other declaration of NewProcessingEngine
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:35:6: max redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:184:6: 	other declaration of max
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:42:6: min redeclared in this block
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:191:6: 	other declaration of min
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:55:29: method ProcessingEngine.SetOriginalImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:55:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:60:29: method ProcessingEngine.GetOriginalImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:60:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:64:29: method ProcessingEngine.GetProcessedImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:64:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:68:29: method ProcessingEngine.buildIntegralImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:68:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:85:29: method ProcessingEngine.ProcessImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:85:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:10:29: method ProcessingEngine.convertToGrayscale already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:159:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:20:29: method ProcessingEngine.matToImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:169:29
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_adaptive.go:4:2: "image" imported and not used
+/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:6:2: "image/color" imported and not used
 
 For details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.
 
@@ -86,4 +72,4 @@ Failed: 5
 
 5 quality checks failed
 exit status 1
-[3:29:01 AM] % 
+[3:45:12 AM] % 
