@@ -49,7 +49,10 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 
 	for i := 1; i <= levels; i++ {
 		pyramid[i] = gocv.NewMat()
-		gocv.PyrDown(pyramid[i-1], &pyramid[i], image.Point{}, gocv.BorderDefault)
+		if err := gocv.PyrDown(pyramid[i-1], &pyramid[i], image.Point{}, gocv.BorderDefault); err != nil {
+			pyramid[i].Close()
+			pyramid[i] = pyramid[i-1].Clone()
+		}
 	}
 
 	defer func() {
@@ -74,7 +77,10 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 
 	for i := levels - 1; i >= 0; i-- {
 		upsampled := gocv.NewMat()
-		gocv.PyrUp(results[i+1], &upsampled, image.Point{}, gocv.BorderDefault)
+		if err := gocv.PyrUp(results[i+1], &upsampled, image.Point{}, gocv.BorderDefault); err != nil {
+			upsampled.Close()
+			continue
+		}
 
 		combined := gocv.NewMat()
 		gocv.BitwiseOr(results[i], upsampled, &combined)
