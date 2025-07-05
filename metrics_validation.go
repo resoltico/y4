@@ -16,6 +16,17 @@ func (e *MatValidationError) Error() string {
 	return fmt.Sprintf("%s: %s (%s)", e.Context, e.Issue, e.MatInfo)
 }
 
+type ValidationError struct {
+	Context string
+	Field   string
+	Value   interface{}
+	Reason  string
+}
+
+func (ve *ValidationError) Error() string {
+	return fmt.Sprintf("%s: invalid %s value %v - %s", ve.Context, ve.Field, ve.Value, ve.Reason)
+}
+
 func validateMatForMetrics(mat gocv.Mat, context string) error {
 	if mat.Empty() {
 		return &MatValidationError{
@@ -103,14 +114,7 @@ func validateBinaryMat(mat gocv.Mat, context string) error {
 		gray = mat
 	}
 
-	minVal, maxVal, _, _, err := gocv.MinMaxLoc(gray)
-	if err != nil {
-		return &MatValidationError{
-			Context: context,
-			Issue:   "min max loc operation failed",
-			MatInfo: err.Error(),
-		}
-	}
+	minVal, maxVal, _, _ := gocv.MinMaxLoc(gray)
 
 	if maxVal-minVal < 1e-6 {
 		return &MatValidationError{
@@ -145,10 +149,7 @@ func ensureBinaryThresholded(src gocv.Mat, context string) (gocv.Mat, error) {
 	defer gray.Close()
 
 	binary := gocv.NewMat()
-	if err := gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary); err != nil {
-		binary.Close()
-		return gocv.NewMat(), fmt.Errorf("threshold operation failed: %w", err)
-	}
+	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
 	return binary, nil
 }
 
@@ -343,17 +344,6 @@ func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
 	}
 
 	return nil
-}
-
-type ValidationError struct {
-	Context string
-	Field   string
-	Value   interface{}
-	Reason  string
-}
-
-func (ve *ValidationError) Error() string {
-	return fmt.Sprintf("%s: invalid %s value %v - %s", ve.Context, ve.Field, ve.Value, ve.Reason)
 }
 
 func validateProcessingInputs(originalImage *ImageData, params *OtsuParameters) error {

@@ -31,10 +31,7 @@ func createBinaryMask(mat gocv.Mat, threshold uint8) (gocv.Mat, error) {
 	defer gray.Close()
 
 	binary := gocv.NewMat()
-	if err := gocv.Threshold(gray, &binary, float64(threshold), 255, gocv.ThresholdBinary); err != nil {
-		binary.Close()
-		return gocv.NewMat(), fmt.Errorf("threshold operation failed: %w", err)
-	}
+	gocv.Threshold(gray, &binary, float32(threshold), 255, gocv.ThresholdBinary)
 	return binary, nil
 }
 
