@@ -1,7 +1,6 @@
 package main
 
 import (
-	"image"
 	"math"
 
 	"gocv.io/x/gocv"

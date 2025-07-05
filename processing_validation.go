@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"image"
 
 	"gocv.io/x/gocv"
 )
@@ -143,25 +142,6 @@ func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
 			Field:   "PyramidLevels",
 			Value:   params.PyramidLevels,
 			Reason:  "must be between 1 and 8",
-		}
-	}
-
-	return nil
-}
-
-func validateContourData(contours [][]image.Point, context string) error {
-	if len(contours) == 0 {
-		return nil
-	}
-
-	for i, contour := range contours {
-		if len(contour) < 3 {
-			return &ValidationError{
-				Context: context,
-				Field:   "contour_points",
-				Value:   fmt.Sprintf("contour %d has %d points", i, len(contour)),
-				Reason:  "contours must have at least 3 points",
-			}
 		}
 	}
 

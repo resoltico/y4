@@ -3,7 +3,6 @@
 package main
 
 import (
-	"context"
 	"log/slog"
 	"runtime"
 	"sync"
@@ -18,8 +17,7 @@ type ResourceMonitor struct {
 	peakMemoryUsage  uint64
 	startTime        time.Time
 	ticker           *time.Ticker
-	ctx              context.Context
-	cancel           context.CancelFunc
+	cancel           func()
 	mutex            sync.RWMutex
 	running          bool
 }
@@ -38,14 +36,10 @@ type OperationStats struct {
 }
 
 func NewResourceMonitor(logger *slog.Logger) *ResourceMonitor {
-	ctx, cancel := context.WithCancel(context.Background())
-
 	return &ResourceMonitor{
 		logger:     logger,
 		operations: make(map[int64]*OperationStats),
 		startTime:  time.Now(),
-		ctx:        ctx,
-		cancel:     cancel,
 	}
 }
 
@@ -74,7 +68,9 @@ func (rm *ResourceMonitor) Stop() {
 	}
 
 	rm.running = false
-	rm.cancel()
+	if rm.cancel != nil {
+		rm.cancel()
+	}
 
 	if rm.ticker != nil {
 		rm.ticker.Stop()
@@ -86,8 +82,6 @@ func (rm *ResourceMonitor) Stop() {
 func (rm *ResourceMonitor) monitorLoop() {
 	for {
 		select {
-		case <-rm.ctx.Done():
-			return
 		case <-rm.ticker.C:
 			rm.captureSystemSnapshot()
 			rm.checkResourceThresholds()
@@ -195,21 +189,31 @@ func (rm *ResourceMonitor) RecordOperationEnd(operationID int64, duration time.D
 	memoryDelta := int64(stats.PeakMemory) - int64(stats.InitialMemory)
 	matDelta := rm.matAllocations - stats.MatAllocations
 
+	var memoryDeltaMB uint64
+	if memoryDelta > 0 {
+		memoryDeltaMB = uint64(memoryDelta)
+	}
+
 	rm.logger.Info("operation monitoring completed",
 		"operation_id", operationID,
 		"method", stats.Method,
 		"duration_ms", duration.Milliseconds(),
 		"success", success,
-		"memory_delta_mb", bytesToMB(uint64(abs(memoryDelta))),
+		"memory_delta_mb", bytesToMB(memoryDeltaMB),
 		"mat_allocations", matDelta,
 		"peak_memory_mb", bytesToMB(stats.PeakMemory),
 	)
 
 	if !success {
+		var leakedMB uint64
+		if memoryDelta > 0 {
+			leakedMB = uint64(memoryDelta)
+		}
+
 		rm.logger.Error("failed operation resource usage",
 			"operation_id", operationID,
 			"method", stats.Method,
-			"memory_leaked_mb", bytesToMB(uint64(max(0, memoryDelta))),
+			"memory_leaked_mb", bytesToMB(leakedMB),
 		)
 	}
 }
@@ -241,6 +245,11 @@ func (rm *ResourceMonitor) DumpStats() {
 		avgDuration = totalDuration / time.Duration(completedOps)
 	}
 
+	successRate := 0.0
+	if completedOps > 0 {
+		successRate = float64(successfulOps) / float64(completedOps)
+	}
+
 	rm.logger.Info("resource monitor statistics",
 		"uptime", uptime.String(),
 		"peak_memory_mb", bytesToMB(rm.peakMemoryUsage),
@@ -248,7 +257,7 @@ func (rm *ResourceMonitor) DumpStats() {
 		"total_operations", len(rm.operations),
 		"completed_operations", completedOps,
 		"successful_operations", successfulOps,
-		"success_rate", float64(successfulOps)/float64(max(1, completedOps)),
+		"success_rate", successRate,
 		"average_duration_ms", avgDuration.Milliseconds(),
 		"mat_allocations", rm.matAllocations,
 		"mat_deallocations", rm.matDeallocations,
@@ -256,11 +265,4 @@ func (rm *ResourceMonitor) DumpStats() {
 		"gc_cycles", m.NumGC,
 		"goroutines", runtime.NumGoroutine(),
 	)
-}
-
-func abs(x int64) int64 {
-	if x < 0 {
-		return -x
-	}
-	return x
 }

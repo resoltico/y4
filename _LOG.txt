@@ -1,75 +1,20 @@
-[3:44:26 AM] % go run cmd/quality_check/main.go check
-Validating environment...
-✓ Go version 1.24 matches requirement
-✓ go.mod exists
-✓ Module name matches project ('otsu-obliterator')
-Ensuring tools are available...
-✓ staticcheck is available
-✓ govulncheck is available
-Checking code formatting...
-✓ All Go files formatted
-Running core quality checks...
-✗ go vet failed
-✗ tests with race detection failed
-✓ dependency management passed
-✓ module verification passed
-Running external tools...
-✗ staticcheck found issues:
--: # otsu-obliterator
-./processing_engine_split.go:11:6: ProcessingEngine redeclared in this block
-	./processing_engine.go:11:6: other declaration of ProcessingEngine
-./processing_engine_split.go:17:6: ImageData redeclared in this block
-	./processing_engine.go:17:6: other declaration of ImageData
-./processing_engine_split.go:26:6: OtsuParameters redeclared in this block
-	./processing_engine.go:26:6: other declaration of OtsuParameters
-./processing_engine_split.go:51:6: NewProcessingEngine redeclared in this block
-	./processing_engine.go:51:6: other declaration of NewProcessingEngine
-./processing_engine_split.go:55:29: method ProcessingEngine.SetOriginalImage already declared at ./processing_engine.go:55:29
-./processing_engine_split.go:60:29: method ProcessingEngine.GetOriginalImage already declared at ./processing_engine.go:60:29
-./processing_engine_split.go:64:29: method ProcessingEngine.GetProcessedImage already declared at ./processing_engine.go:64:29
-./processing_engine_split.go:68:29: method ProcessingEngine.buildIntegralImage already declared at ./processing_engine.go:68:29
-./processing_engine_utils.go:35:6: max redeclared in this block
-	./processing_engine.go:184:6: other declaration of max
-./processing_engine_utils.go:42:6: min redeclared in this block
-	./processing_engine.go:191:6: other declaration of min
-./processing_engine_split.go:68:29: too many errors (compile)
-✗ Security vulnerabilities detected:
-govulncheck: loading packages: 
-There are errors with the provided package patterns:
-
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:11:6: ProcessingEngine redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:11:6: 	other declaration of ProcessingEngine
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:17:6: ImageData redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:17:6: 	other declaration of ImageData
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:26:6: OtsuParameters redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:26:6: 	other declaration of OtsuParameters
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:51:6: NewProcessingEngine redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:51:6: 	other declaration of NewProcessingEngine
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:35:6: max redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:184:6: 	other declaration of max
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:42:6: min redeclared in this block
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:191:6: 	other declaration of min
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:55:29: method ProcessingEngine.SetOriginalImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:55:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:60:29: method ProcessingEngine.GetOriginalImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:60:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:64:29: method ProcessingEngine.GetProcessedImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:64:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:68:29: method ProcessingEngine.buildIntegralImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:68:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:85:29: method ProcessingEngine.ProcessImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:85:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:10:29: method ProcessingEngine.convertToGrayscale already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:159:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_utils.go:20:29: method ProcessingEngine.matToImage already declared at /Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine.go:169:29
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_adaptive.go:4:2: "image" imported and not used
-/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/processing_engine_split.go:6:2: "image/color" imported and not used
-
-For details on package patterns, see https://pkg.go.dev/cmd/go#hdr-Package_lists_and_patterns.
-
-Verifying build...
-✗ Build failed
-
-==================================
-Quality Check Summary
-==================================
-Passed: 8
-Failed: 5
-
-5 quality checks failed
-exit status 1
-[3:45:12 AM] % 
+[6:31:57 AM] % ./otsu-obliterator 2>&1 | grep -E "(DEBUG|ERROR|WARN)"
+timestamp=06:31:59.567 level=INFO source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:103 msg="debug system initialized" log_level=DEBUG tracing_enabled=true monitoring_enabled=true
+timestamp=06:32:03.820 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_tracer.go:56 msg="parameter snapshot recorded" operation_id=1 method=image_load parameters="{\"WindowSize\":0,\"HistogramBins\":0,\"SmoothingStrength\":0,\"EdgePreservation\":false,\"NoiseRobustness\":false,\"GaussianPreprocessing\":false,\"UseLogHistogram\":false,\"NormalizeHistogram\":false,\"ApplyContrastEnhancement\":false,\"AdaptiveWindowSizing\":false,\"MultiScaleProcessing\":false,\"PyramidLevels\":0,\"NeighborhoodType\":\"\",\"InterpolationMethod\":\"\",\"MorphologicalPostProcess\":false,\"MorphologicalKernelSize\":0,\"HomomorphicFiltering\":false,\"AnisotropicDiffusion\":false,\"DiffusionIterations\":0,\"DiffusionKappa\":0,\"RegionAdaptiveThresholding\":false,\"RegionGridSize\":0}"
+timestamp=06:32:03.820 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:161 msg="operation monitoring started" operation_id=1 method=image_load initial_memory_mb=17.061683654785156 goroutines=12
+timestamp=06:32:03.821 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:322 msg="memory usage" context=before_image_load heap_alloc_mb=17.098983764648438 heap_sys_mb=63.34375 heap_objects=80055 gc_cycles=9 goroutines=12
+timestamp=06:32:03.901 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:192 msg="image operation completed" operation_id=1 operation=load input_size=0x0 output_size=1115x804 duration_ms=81
+timestamp=06:32:03.901 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:322 msg="memory usage" context=after_image_load heap_alloc_mb=25.86853790283203 heap_sys_mb=63.3125 heap_objects=56346 gc_cycles=10 goroutines=12
+timestamp=06:32:03.909 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:175 msg="parameter changed" field=ImageLoaded old_value=none new_value=1115x804 timestamp=1751686323909
+timestamp=06:32:03.909 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_tracer.go:80 msg="parameter change traced" field=ImageLoaded old_value=none new_value=1115x804 change_count=1
+timestamp=06:32:04.568 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:100 msg="system snapshot" heap_alloc_mb=37.97386169433594 heap_sys_mb=75.28125 heap_objects=79393 goroutines=12 gc_cycles=10 cgo_calls=1026460
+timestamp=06:32:09.568 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:100 msg="system snapshot" heap_alloc_mb=41.7437744140625 heap_sys_mb=75.28125 heap_objects=179935 goroutines=12 gc_cycles=10 cgo_calls=1342730
+timestamp=06:32:11.071 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_tracer.go:56 msg="parameter snapshot recorded" operation_id=2 method=multi_scale_3_levels parameters="{\"WindowSize\":7,\"HistogramBins\":0,\"SmoothingStrength\":1,\"EdgePreservation\":false,\"NoiseRobustness\":false,\"GaussianPreprocessing\":true,\"UseLogHistogram\":false,\"NormalizeHistogram\":true,\"ApplyContrastEnhancement\":false,\"AdaptiveWindowSizing\":false,\"MultiScaleProcessing\":true,\"PyramidLevels\":3,\"NeighborhoodType\":\"Rectangular\",\"InterpolationMethod\":\"Bilinear\",\"MorphologicalPostProcess\":false,\"MorphologicalKernelSize\":2,\"HomomorphicFiltering\":false,\"AnisotropicDiffusion\":false,\"DiffusionIterations\":5,\"DiffusionKappa\":30,\"RegionAdaptiveThresholding\":false,\"RegionGridSize\":64}"
+timestamp=06:32:11.071 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:161 msg="operation monitoring started" operation_id=2 method=multi_scale_3_levels initial_memory_mb=31.202598571777344 goroutines=13
+timestamp=06:32:11.071 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:322 msg="memory usage" context=before_processing heap_alloc_mb=31.203407287597656 heap_sys_mb=75.25 heap_objects=68170 gc_cycles=11 goroutines=13
+timestamp=06:32:13.711 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:322 msg="memory usage" context=after_processing heap_alloc_mb=33.33775329589844 heap_sys_mb=75.25 heap_objects=113096 gc_cycles=11 goroutines=13
+timestamp=06:32:13.711 level=ERROR source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_system.go:160 msg="processing operation failed" operation_id=2 duration_ms=2640 success=false error="metrics calculation failed"
+timestamp=06:32:13.712 level=ERROR source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:213 msg="failed operation resource usage" operation_id=2 method=multi_scale_3_levels memory_leaked_mb=2.1364212036132812
+timestamp=06:32:14.568 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:100 msg="system snapshot" heap_alloc_mb=21.213714599609375 heap_sys_mb=75.28125 heap_objects=89660 goroutines=12 gc_cycles=12 cgo_calls=56336212
+timestamp=06:32:19.568 level=DEBUG source=/Users/erst/Library/CloudStorage/Dropbox/Websites/y4/debug_monitor.go:100 msg="system snapshot" heap_alloc_mb=30.712921142578125 heap_sys_mb=75.28125 heap_objects=58872 goroutines=12 gc_cycles=13 cgo_calls=56533225
+[6:35:45 AM] % 

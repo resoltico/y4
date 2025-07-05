@@ -148,7 +148,21 @@ func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *B
 
 	pe.processedImage = processedData
 
-	metrics := CalculateBinaryMetrics(pe.originalImage.Mat, result)
+	// Create ground truth mat with same dimensions as result for metrics calculation
+	groundTruthGray := pe.convertToGrayscale(pe.originalImage.Mat)
+	defer groundTruthGray.Close()
+
+	groundTruth := gocv.NewMat()
+	defer groundTruth.Close()
+
+	// Resize ground truth to match result dimensions if needed
+	if groundTruthGray.Rows() != result.Rows() || groundTruthGray.Cols() != result.Cols() {
+		gocv.Resize(groundTruthGray, &groundTruth, image.Point{X: result.Cols(), Y: result.Rows()}, 0, 0, gocv.InterpolationLinear)
+	} else {
+		groundTruth = groundTruthGray.Clone()
+	}
+
+	metrics := CalculateBinaryMetrics(groundTruth, result)
 	if metrics == nil {
 		return processedData, nil, fmt.Errorf("metrics calculation failed for %dx%d image", result.Rows(), result.Cols())
 	}
