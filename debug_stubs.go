@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-// Debug stubs for release builds
 type DebugSystem struct {
 	logger *slog.Logger
 }

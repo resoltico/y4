@@ -2,97 +2,99 @@
 
 Advanced 2D Otsu thresholding application with multiple image quality metrics and processing methods.
 
+## Quick Start
+
+```bash
+# Build and run
+./build.sh run
+
+# Or manual execution
+go run .
+```
+
+## Debug Mode
+
+### Enable Debug Features
+```bash
+# Build with debug instrumentation
+go build -tags debug -o otsu-obliterator .
+
+# Run with debug logging
+./otsu-obliterator 2>&1 | grep -E "(DEBUG|ERROR|WARN)"
+
+# Set debug log level
+export LOG_LEVEL=debug
+go run -tags debug .
+```
+
+### Debug Output Filtering
+```bash
+# View all debug output
+go run -tags debug .
+
+# Filter by category
+go run -tags debug . 2>&1 | grep "operation_id"     # Operations
+go run -tags debug . 2>&1 | grep "memory"           # Memory usage
+go run -tags debug . 2>&1 | grep "parameter"        # Parameter changes
+go run -tags debug . 2>&1 | grep "system snapshot"  # Resource monitoring
+go run -tags debug . 2>&1 | grep "duration_ms"      # Performance timing
+```
+
+### Debug Features
+- **Resource Monitoring**: Memory, goroutines, GC analysis (5s intervals)
+- **Operation Tracing**: Processing pipeline with IDs and timing
+- **Parameter History**: UI parameter change tracking
+- **Performance Metrics**: Memory allocation and timing data
+
 ## Quality Assurance
 
-### Quick Check
 ```bash
-go run cmd/quality_check/main.go check
-```
-
-### Fast Check (without external tools)
-```bash
-go run cmd/quality_check/main.go fast
-```
-
-### Format Check Only
-```bash
-go run cmd/quality_check/main.go format
+go run cmd/quality_check/main.go check    # Full check with external tools
+go run cmd/quality_check/main.go fast     # Core checks only
+go run cmd/quality_check/main.go format   # Format validation only
 ```
 
 ## Building
 
-### Development Build
 ```bash
-./build.sh build debug
-```
-
-### Production Build
-```bash
-./build.sh build
-```
-
-### Cross-platform Build
-```bash
-./build.sh build all
-```
-
-## Running
-
-### Direct Execution
-```bash
-./build.sh run
-```
-
-### Manual Execution
-```bash
-./build/otsu-obliterator
-```
-
-### Debug Mode
-
-Enable debug logging to troubleshoot issues:
-
-```bash
-go run . 2>&1 | grep -E "(DEBUG|ERROR)"
+./build.sh build         # Production build
+./build.sh build debug   # Development build with race detection
+./build.sh build all     # Cross-platform builds
 ```
 
 ## Features
 
 ### Processing Methods
-- **Single Scale**: Standard 2D Otsu thresholding with integer threshold optimization
-- **Multi-Scale Pyramid**: Processes multiple resolution levels for complex documents
-- **Region Adaptive**: Applies different thresholds to image regions
+- **Single Scale**: Standard 2D Otsu thresholding
+- **Multi-Scale Pyramid**: Multiple resolution levels
+- **Region Adaptive**: Grid-based local thresholding
 
 ### Algorithm Parameters
-- **Window Size**: Neighborhood size for local statistics (3-21, adaptive sizing available)
-- **Histogram Bins**: Bins for 2D histogram construction (auto-calculated or 32-256)
-- **Smoothing Strength**: Gaussian smoothing of histogram (0-5)
-- **Neighborhood Types**: Rectangular, circular, or distance-weighted neighborhoods
+- **Window Size**: Neighborhood size (3-21, adaptive available)
+- **Histogram Bins**: 2D histogram bins (auto or 32-256)
+- **Smoothing Strength**: Gaussian histogram smoothing (0-5)
+- **Neighborhood Types**: Rectangular, circular, distance-weighted
 
 ### Preprocessing Options
-- **Gaussian Preprocessing**: Blur reduction before processing
-- **Adaptive Contrast Enhancement**: CLAHE-based contrast improvement
-- **Homomorphic Filtering**: Illumination variation correction
-- **Anisotropic Diffusion**: Edge-preserving noise reduction
+- **Gaussian Preprocessing**: Blur reduction
+- **Adaptive Contrast Enhancement**: CLAHE improvement
+- **Homomorphic Filtering**: Illumination correction
+- **Anisotropic Diffusion**: Edge-preserving smoothing
 
 ### Quality Metrics (DIBCO Standard)
-- **F-measure**: Standard precision/recall harmonic mean
-- **Pseudo F-measure**: DIBCO standard weighted F-measure (β=0.5)
-- **NRM**: Negative Rate Metric for error quantification
-- **DRD**: Distance Reciprocal Distortion for visual quality assessment
-- **MPM**: Morphological Path Misalignment for object-level accuracy
-- **Background/Foreground Contrast**: Clutter and speckle analysis
-- **Skeleton Similarity**: Structural accuracy measurement
-
-### Post-Processing
-- **Morphological Operations**: Opening and closing with configurable kernel sizes
-- **Interpolation Methods**: Nearest, bilinear, and bicubic for scaling operations
+- **F-measure**: Precision/recall harmonic mean
+- **Pseudo F-measure**: DIBCO weighted (β=0.5)
+- **NRM**: Negative Rate Metric
+- **DRD**: Distance Reciprocal Distortion
+- **MPM**: Morphological Path Misalignment
+- **BFC**: Background/Foreground Contrast
+- **Skeleton**: Structural similarity
 
 ### User Interface
-- **Image Viewer**: Side-by-side comparison with zoom controls and view modes
-- **Parameter Panel**: Organized controls for all algorithm parameters
-- **Metrics Display**: Real-time quality assessment with detailed breakdown
-- **File Operations**: Load/save with format selection and quality options
+- **Image Viewer**: Side-by-side comparison with zoom controls
+- **Parameter Panel**: Real-time algorithm controls
+- **Metrics Display**: Live quality assessment
+- **File Operations**: Load/save with format options
 
 ## Dependencies
 
@@ -100,81 +102,39 @@ go run . 2>&1 | grep -E "(DEBUG|ERROR)"
 - OpenCV 4.x
 - Fyne v2.6.1
 
-## Installation
+### Installation
 
-### macOS
-```bash
-brew install opencv
-```
-
-### Ubuntu/Debian
-```bash
-sudo apt-get install libopencv-dev
-```
-
-### Windows
-Download OpenCV from opencv.org and configure environment variables.
+**macOS**: `brew install opencv`  
+**Ubuntu/Debian**: `sudo apt-get install libopencv-dev`  
+**Windows**: Download from opencv.org, configure environment
 
 ## Architecture
 
-This application follows a flat structure pattern for applications under 3500 lines of code:
+Flat structure (34 files, all <300 LOC):
 
-- `main.go` - Application entry point
-- `app.go` - Application setup and lifecycle management
-- `ui_*.go` - User interface components (toolbar, parameters, image viewer, file operations)
-- `processing.go` - Image processing algorithms with validation
-- `metrics.go` - Quality measurement calculations
-- `io_image.go` - File input/output operations
+**Core**: `main.go`, `app.go`, `app_about.go`  
+**Processing**: `processing_engine.go`, `processing_methods.go`, `processing_validation.go`, `processing_neighborhood.go`, `processing_otsu.go`, `processing_preprocess.go`, `processing_timeout.go`  
+**UI**: `ui_toolbar.go`, `ui_toolbar_metrics.go`, `ui_imageviewer.go`, `ui_parameter_panel.go`, `ui_filesavemenu.go`  
+**Metrics/IO**: `metrics.go`, `io_image.go`  
+**Debug**: `debug_stubs.go` (release), `debug_system.go`, `debug_monitor.go`, `debug_tracer.go` (debug builds)  
 
 ## Algorithm Implementation
 
 ### 2D Otsu Thresholding
-The implementation uses the Liu and Li (1993) extension of Otsu's algorithm:
-- 2D histogram construction using pixel intensity vs neighborhood mean
-- Integer threshold optimization (removes non-standard subpixel approach)
-- Between-class variance maximization
-- Multiple neighborhood calculation methods
+Liu and Li (1993) extension with integer threshold optimization, 2D histograms using pixel intensity vs neighborhood mean, between-class variance maximization.
 
 ### Quality Metrics
-All metrics follow DIBCO (Document Image Binarization Contest) standards:
-- **F-measure**: Standard binary classification metric
-- **Pseudo F-measure**: Uses β=0.5 weighting as per DIBCO specification
-- **DRD**: Implements Lu et al. (2004) methodology with 5×5 weighting matrices
-- **MPM**: Object-level evaluation using Hausdorff distance between contours
-- **NRM**: Standard negative rate calculation (FN+FP)/(2*(TP+TN))
+DIBCO standards: F-measure, Pseudo F-measure (β=0.5), DRD with 5×5 weighting matrices, MPM using Hausdorff distance, NRM as (FN+FP)/(2*(TP+TN)).
 
-### Processing Enhancements
-- **Multi-scale pyramid**: Processes images at multiple resolutions
-- **Region-adaptive thresholding**: Grid-based local threshold optimization
-- **Adaptive window sizing**: Dynamic neighborhood size based on image statistics
-- **Advanced preprocessing**: Homomorphic filtering and anisotropic diffusion
+### Performance
+- Single scale: O(n²)
+- Multi-scale: O(n² log n) 
+- Region adaptive: O(n²/g²)
 
-## Quality Tools
+## Validation
 
-The application includes native Go quality checking:
+Tested against DIBCO datasets, academic implementations, and standard benchmarks. Metrics match published results within acceptable tolerances.
 
-- Static analysis with go vet
-- Race condition detection
-- Code formatting validation
-- Dependency verification
-- Optional staticcheck and govulncheck integration
+## License
 
-## Performance Characteristics
-
-### Computational Complexity
-- Single scale: O(n²) for n×n images
-- Multi-scale: O(n² log n) with pyramid levels
-- Region adaptive: O(n²/g²) where g is grid size
-
-## Validation and Testing
-
-The implementation has been validated against:
-- DIBCO contest ground truth datasets
-- Academic reference implementations
-- Standard computer vision benchmarks
-
-Quality metrics match published academic results within acceptable tolerances.
-
-## License & Authors
-
-MIT, Ervins Strauhmanis
+MIT - Ervins Strauhmanis

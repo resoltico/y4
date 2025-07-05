@@ -37,18 +37,6 @@ type OperationStats struct {
 	MatAllocations int64
 }
 
-type SystemSnapshot struct {
-	Timestamp   time.Time
-	HeapAlloc   uint64
-	HeapSys     uint64
-	HeapIdle    uint64
-	HeapInuse   uint64
-	HeapObjects uint64
-	GCCycles    uint32
-	Goroutines  int
-	CGOCalls    int64
-}
-
 func NewResourceMonitor(logger *slog.Logger) *ResourceMonitor {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -74,9 +62,7 @@ func (rm *ResourceMonitor) Start() {
 
 	go rm.monitorLoop()
 
-	rm.logger.Info("resource monitor started",
-		"interval", "5s",
-	)
+	rm.logger.Info("resource monitor started", "interval", "5s")
 }
 
 func (rm *ResourceMonitor) Stop() {
@@ -113,29 +99,17 @@ func (rm *ResourceMonitor) captureSystemSnapshot() {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
-	snapshot := SystemSnapshot{
-		Timestamp:   time.Now(),
-		HeapAlloc:   m.HeapAlloc,
-		HeapSys:     m.HeapSys,
-		HeapIdle:    m.HeapIdle,
-		HeapInuse:   m.HeapInuse,
-		HeapObjects: m.HeapObjects,
-		GCCycles:    m.NumGC,
-		Goroutines:  runtime.NumGoroutine(),
-		CGOCalls:    runtime.NumCgoCall(),
-	}
-
-	if snapshot.HeapAlloc > rm.peakMemoryUsage {
-		rm.peakMemoryUsage = snapshot.HeapAlloc
+	if m.HeapAlloc > rm.peakMemoryUsage {
+		rm.peakMemoryUsage = m.HeapAlloc
 	}
 
 	rm.logger.Debug("system snapshot",
-		"heap_alloc_mb", bytesToMB(snapshot.HeapAlloc),
-		"heap_sys_mb", bytesToMB(snapshot.HeapSys),
-		"heap_objects", snapshot.HeapObjects,
-		"goroutines", snapshot.Goroutines,
-		"gc_cycles", snapshot.GCCycles,
-		"cgo_calls", snapshot.CGOCalls,
+		"heap_alloc_mb", bytesToMB(m.HeapAlloc),
+		"heap_sys_mb", bytesToMB(m.HeapSys),
+		"heap_objects", m.HeapObjects,
+		"goroutines", runtime.NumGoroutine(),
+		"gc_cycles", m.NumGC,
+		"cgo_calls", runtime.NumCgoCall(),
 	)
 }
 
@@ -227,7 +201,6 @@ func (rm *ResourceMonitor) RecordOperationEnd(operationID int64, duration time.D
 		"duration_ms", duration.Milliseconds(),
 		"success", success,
 		"memory_delta_mb", bytesToMB(uint64(abs(memoryDelta))),
-		"memory_direction", getMemoryDirection(memoryDelta),
 		"mat_allocations", matDelta,
 		"peak_memory_mb", bytesToMB(stats.PeakMemory),
 	)
@@ -239,98 +212,6 @@ func (rm *ResourceMonitor) RecordOperationEnd(operationID int64, duration time.D
 			"memory_leaked_mb", bytesToMB(uint64(max(0, memoryDelta))),
 		)
 	}
-}
-
-func (rm *ResourceMonitor) RecordMatAllocation(size int) {
-	rm.mutex.Lock()
-	defer rm.mutex.Unlock()
-
-	rm.matAllocations++
-
-	rm.logger.Debug("mat allocation recorded",
-		"allocation_count", rm.matAllocations,
-		"size_bytes", size,
-	)
-}
-
-func (rm *ResourceMonitor) RecordMatDeallocation() {
-	rm.mutex.Lock()
-	defer rm.mutex.Unlock()
-
-	rm.matDeallocations++
-
-	rm.logger.Debug("mat deallocation recorded",
-		"deallocation_count", rm.matDeallocations,
-		"balance", rm.matAllocations-rm.matDeallocations,
-	)
-}
-
-func (rm *ResourceMonitor) GetOperationStats(operationID int64) (*OperationStats, bool) {
-	rm.mutex.RLock()
-	defer rm.mutex.RUnlock()
-
-	stats, exists := rm.operations[operationID]
-	if !exists {
-		return nil, false
-	}
-
-	statsCopy := *stats
-	return &statsCopy, true
-}
-
-func (rm *ResourceMonitor) GetActiveOperations() []int64 {
-	rm.mutex.RLock()
-	defer rm.mutex.RUnlock()
-
-	var active []int64
-	for id, stats := range rm.operations {
-		if stats.EndTime.IsZero() {
-			active = append(active, id)
-		}
-	}
-
-	return active
-}
-
-func (rm *ResourceMonitor) DetectMemoryLeaks() []int64 {
-	rm.mutex.RLock()
-	defer rm.mutex.RUnlock()
-
-	var leakyOperations []int64
-
-	for id, stats := range rm.operations {
-		if !stats.EndTime.IsZero() && !stats.Success {
-			memoryDelta := int64(stats.PeakMemory) - int64(stats.InitialMemory)
-			if memoryDelta > 10*1024*1024 { // 10MB threshold
-				leakyOperations = append(leakyOperations, id)
-			}
-		}
-	}
-
-	if len(leakyOperations) > 0 {
-		rm.logger.Warn("potential memory leaks detected",
-			"operations", leakyOperations,
-		)
-	}
-
-	return leakyOperations
-}
-
-func (rm *ResourceMonitor) DetectMatLeaks() int64 {
-	rm.mutex.RLock()
-	defer rm.mutex.RUnlock()
-
-	balance := rm.matAllocations - rm.matDeallocations
-
-	if balance > 10 { // Threshold for leaked Mat objects
-		rm.logger.Warn("mat memory leaks detected",
-			"allocations", rm.matAllocations,
-			"deallocations", rm.matDeallocations,
-			"leaked_mats", balance,
-		)
-	}
-
-	return balance
 }
 
 func (rm *ResourceMonitor) DumpStats() {
@@ -375,35 +256,6 @@ func (rm *ResourceMonitor) DumpStats() {
 		"gc_cycles", m.NumGC,
 		"goroutines", runtime.NumGoroutine(),
 	)
-}
-
-func (rm *ResourceMonitor) CleanupOldOperations(maxAge time.Duration) {
-	rm.mutex.Lock()
-	defer rm.mutex.Unlock()
-
-	cutoff := time.Now().Add(-maxAge)
-	cleaned := 0
-
-	for id, stats := range rm.operations {
-		if !stats.EndTime.IsZero() && stats.EndTime.Before(cutoff) {
-			delete(rm.operations, id)
-			cleaned++
-		}
-	}
-
-	rm.logger.Info("operation history cleanup completed",
-		"operations_cleaned", cleaned,
-		"cutoff_time", cutoff,
-	)
-}
-
-func getMemoryDirection(delta int64) string {
-	if delta > 0 {
-		return "increased"
-	} else if delta < 0 {
-		return "decreased"
-	}
-	return "unchanged"
 }
 
 func abs(x int64) int64 {

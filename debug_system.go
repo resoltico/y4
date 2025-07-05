@@ -132,7 +132,6 @@ func (ds *DebugSystem) TraceProcessingStart(method string, params *OtsuParameter
 		"window_size", params.WindowSize,
 		"histogram_bins", params.HistogramBins,
 		"smoothing_strength", params.SmoothingStrength,
-		"preprocessing_flags", ds.getPreprocessingFlags(params),
 	)
 
 	if ds.tracer != nil {
@@ -200,36 +199,6 @@ func (ds *DebugSystem) TraceImageOperation(operationID int64, operation string, 
 	)
 }
 
-func (ds *DebugSystem) TraceMatOperation(operationID int64, operation string, matInfo MatInfo) {
-	if !ds.enabled {
-		return
-	}
-
-	ds.logger.Debug("mat operation",
-		"operation_id", operationID,
-		"operation", operation,
-		"mat_rows", matInfo.Rows,
-		"mat_cols", matInfo.Cols,
-		"mat_type", matInfo.Type,
-		"mat_channels", matInfo.Channels,
-		"mat_empty", matInfo.Empty,
-	)
-}
-
-func (ds *DebugSystem) TraceHistogramStats(operationID int64, bins int, nonZeroCount int, maxValue, minValue float64) {
-	if !ds.enabled {
-		return
-	}
-
-	ds.logger.Debug("histogram statistics",
-		"operation_id", operationID,
-		"bins", bins,
-		"non_zero_bins", nonZeroCount,
-		"max_value", maxValue,
-		"min_value", minValue,
-	)
-}
-
 func (ds *DebugSystem) TraceThresholdCalculation(operationID int64, threshold [2]int, variance float64) {
 	if !ds.enabled {
 		return
@@ -243,39 +212,6 @@ func (ds *DebugSystem) TraceThresholdCalculation(operationID int64, threshold [2
 	)
 }
 
-func (ds *DebugSystem) TraceMemoryUsage(context string) {
-	if !ds.enabled {
-		return
-	}
-
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	ds.logger.Debug("memory usage",
-		"context", context,
-		"heap_alloc_mb", bytesToMB(m.HeapAlloc),
-		"heap_sys_mb", bytesToMB(m.HeapSys),
-		"heap_idle_mb", bytesToMB(m.HeapIdle),
-		"heap_inuse_mb", bytesToMB(m.HeapInuse),
-		"heap_objects", m.HeapObjects,
-		"gc_cycles", m.NumGC,
-		"goroutines", runtime.NumGoroutine(),
-	)
-}
-
-func (ds *DebugSystem) TraceTimeout(operation string, duration time.Duration, context string) {
-	if !ds.enabled {
-		return
-	}
-
-	ds.logger.Warn("operation timeout",
-		"operation", operation,
-		"timeout_duration", duration.String(),
-		"context", context,
-		"timestamp", time.Now().UnixMilli(),
-	)
-}
-
 func (ds *DebugSystem) TraceValidationError(err error, context string) {
 	if !ds.enabled {
 		return
@@ -286,19 +222,6 @@ func (ds *DebugSystem) TraceValidationError(err error, context string) {
 		"context", context,
 		"error_type", fmt.Sprintf("%T", err),
 	)
-}
-
-func (ds *DebugSystem) getPreprocessingFlags(params *OtsuParameters) map[string]bool {
-	return map[string]bool{
-		"gaussian":        params.GaussianPreprocessing,
-		"contrast":        params.ApplyContrastEnhancement,
-		"homomorphic":     params.HomomorphicFiltering,
-		"anisotropic":     params.AnisotropicDiffusion,
-		"adaptive_window": params.AdaptiveWindowSizing,
-		"log_histogram":   params.UseLogHistogram,
-		"normalize":       params.NormalizeHistogram,
-		"morphological":   params.MorphologicalPostProcess,
-	}
 }
 
 func (ds *DebugSystem) DumpSystemState() {
@@ -321,15 +244,6 @@ func (ds *DebugSystem) DumpSystemState() {
 
 	if ds.monitor != nil {
 		ds.monitor.DumpStats()
-	}
-}
-
-func (ds *DebugSystem) EnableDebugMode(enabled bool) {
-	ds.enabled = enabled
-	if enabled {
-		ds.logger.Info("debug mode enabled")
-	} else {
-		ds.logger.Info("debug mode disabled")
 	}
 }
 
@@ -368,7 +282,6 @@ func bytesToMB(bytes uint64) float64 {
 	return float64(bytes) / 1024 / 1024
 }
 
-// Debugging utilities for common operations
 func DebugTraceStart(method string, params *OtsuParameters, imageSize [2]int) int64 {
 	ds := GetDebugSystem()
 	return ds.TraceProcessingStart(method, params, imageSize)
@@ -391,10 +304,28 @@ func DebugTraceParam(field string, oldValue, newValue interface{}) {
 
 func DebugTraceMat(operationID int64, operation string, mat gocv.Mat) {
 	ds := GetDebugSystem()
-	ds.TraceMatOperation(operationID, operation, GetMatInfo(mat))
+	ds.logger.Debug("mat operation",
+		"operation_id", operationID,
+		"operation", operation,
+		"mat_rows", mat.Rows(),
+		"mat_cols", mat.Cols(),
+		"mat_type", mat.Type(),
+		"mat_channels", mat.Channels(),
+		"mat_empty", mat.Empty(),
+	)
 }
 
 func DebugTraceMemory(context string) {
 	ds := GetDebugSystem()
-	ds.TraceMemoryUsage(context)
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	ds.logger.Debug("memory usage",
+		"context", context,
+		"heap_alloc_mb", bytesToMB(m.HeapAlloc),
+		"heap_sys_mb", bytesToMB(m.HeapSys),
+		"heap_objects", m.HeapObjects,
+		"gc_cycles", m.NumGC,
+		"goroutines", runtime.NumGoroutine(),
+	)
 }

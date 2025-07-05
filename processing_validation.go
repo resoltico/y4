@@ -80,92 +80,78 @@ func validateImageMat(mat gocv.Mat, context string) error {
 	return nil
 }
 
-func validateKernelSize(kernelSize int, imageWidth, imageHeight int, context string) error {
-	if kernelSize < 1 {
+func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
+	if params == nil {
 		return &ValidationError{
-			Context: context,
-			Field:   "kernel_size",
-			Value:   kernelSize,
-			Reason:  "must be positive",
+			Context: "parameter validation",
+			Field:   "params",
+			Value:   nil,
+			Reason:  "parameters object is nil",
 		}
 	}
 
-	if kernelSize%2 == 0 {
+	width, height := imageSize[0], imageSize[1]
+
+	if params.WindowSize < 3 || params.WindowSize > 21 {
 		return &ValidationError{
-			Context: context,
-			Field:   "kernel_size",
-			Value:   kernelSize,
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
+			Reason:  "must be between 3 and 21",
+		}
+	}
+
+	if params.WindowSize%2 == 0 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
 			Reason:  "must be odd number",
 		}
 	}
 
-	if kernelSize >= imageWidth || kernelSize >= imageHeight {
+	if params.WindowSize >= min(width, height) {
 		return &ValidationError{
-			Context: context,
-			Field:   "kernel_size",
-			Value:   kernelSize,
-			Reason:  fmt.Sprintf("must be smaller than image dimensions %dx%d", imageWidth, imageHeight),
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
+			Reason:  fmt.Sprintf("must be smaller than image dimensions %dx%d", width, height),
+		}
+	}
+
+	if params.HistogramBins < 0 || params.HistogramBins > 256 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "HistogramBins",
+			Value:   params.HistogramBins,
+			Reason:  "must be 0 (auto) or between 1 and 256",
+		}
+	}
+
+	if params.SmoothingStrength < 0.0 || params.SmoothingStrength > 10.0 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "SmoothingStrength",
+			Value:   params.SmoothingStrength,
+			Reason:  "must be between 0.0 and 10.0",
+		}
+	}
+
+	if params.PyramidLevels < 1 || params.PyramidLevels > 8 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "PyramidLevels",
+			Value:   params.PyramidLevels,
+			Reason:  "must be between 1 and 8",
 		}
 	}
 
 	return nil
 }
 
-func safeMatCreation(rows, cols int, matType gocv.MatType, context string) (gocv.Mat, error) {
-	if rows <= 0 || cols <= 0 {
-		return gocv.Mat{}, &ValidationError{
-			Context: context,
-			Field:   "dimensions",
-			Value:   fmt.Sprintf("%dx%d", cols, rows),
-			Reason:  "dimensions must be positive",
-		}
-	}
-
-	if rows > 32768 || cols > 32768 {
-		return gocv.Mat{}, &ValidationError{
-			Context: context,
-			Field:   "dimensions",
-			Value:   fmt.Sprintf("%dx%d", cols, rows),
-			Reason:  "dimensions exceed maximum size 32768x32768",
-		}
-	}
-
-	mat := gocv.NewMatWithSize(rows, cols, matType)
-	if mat.Empty() {
-		return gocv.Mat{}, &ValidationError{
-			Context: context,
-			Field:   "allocation",
-			Value:   fmt.Sprintf("%dx%d type %d", cols, rows, matType),
-			Reason:  "failed to allocate matrix memory",
-		}
-	}
-
-	return mat, nil
-}
-
-func safeMatOperation(operation func() error, mats []gocv.Mat, context string) error {
-	defer func() {
-		if r := recover(); r != nil {
-			for _, mat := range mats {
-				if !mat.Empty() {
-					mat.Close()
-				}
-			}
-		}
-	}()
-
-	for i, mat := range mats {
-		if err := validateImageMat(mat, fmt.Sprintf("%s mat[%d]", context, i)); err != nil {
-			return err
-		}
-	}
-
-	return operation()
-}
-
 func validateContourData(contours [][]image.Point, context string) error {
 	if len(contours) == 0 {
-		return nil // Empty contours is valid
+		return nil
 	}
 
 	for i, contour := range contours {
@@ -175,17 +161,6 @@ func validateContourData(contours [][]image.Point, context string) error {
 				Field:   "contour_points",
 				Value:   fmt.Sprintf("contour %d has %d points", i, len(contour)),
 				Reason:  "contours must have at least 3 points",
-			}
-		}
-
-		for j, point := range contour {
-			if point.X < 0 || point.Y < 0 {
-				return &ValidationError{
-					Context: context,
-					Field:   "contour_coordinates",
-					Value:   fmt.Sprintf("contour %d point %d: (%d,%d)", i, j, point.X, point.Y),
-					Reason:  "coordinates must be non-negative",
-				}
 			}
 		}
 	}

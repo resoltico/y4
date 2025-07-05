@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -12,19 +13,44 @@ import (
 type ParameterPanel struct {
 	app       *Application
 	container *fyne.Container
-	binder    *ParameterBinder
-
-	// Widget groups
-	basicWidgets        *BasicParameterWidgets
-	algorithmWidgets    *AlgorithmWidgets
-	methodWidgets       *MethodWidgets
-	neighborhoodWidgets *NeighborhoodWidgets
-	preprocessWidgets   *PreprocessingWidgets
-	postprocessWidgets  *PostprocessingWidgets
+	widgets   *ParameterWidgets
 
 	lastProcessTime  time.Time
 	processingCtx    context.Context
 	processingCancel context.CancelFunc
+}
+
+type ParameterWidgets struct {
+	processingMethodSelect *widget.Select
+	windowSizeSlider       *widget.Slider
+	windowSizeLabel        *widget.Label
+	histBinsSlider         *widget.Slider
+	histBinsLabel          *widget.Label
+	smoothingSlider        *widget.Slider
+	smoothingLabel         *widget.Label
+	pyramidLevelsSlider    *widget.Slider
+	pyramidLevelsLabel     *widget.Label
+	regionGridSlider       *widget.Slider
+	regionGridLabel        *widget.Label
+	neighborhoodSelect     *widget.Select
+	interpolationSelect    *widget.Select
+	morphKernelSlider      *widget.Slider
+	morphKernelLabel       *widget.Label
+	diffusionIterSlider    *widget.Slider
+	diffusionIterLabel     *widget.Label
+	diffusionKappaSlider   *widget.Slider
+	diffusionKappaLabel    *widget.Label
+
+	edgePreservationCheck   *widget.Check
+	noiseRobustnessCheck    *widget.Check
+	gaussianPreprocessCheck *widget.Check
+	useLogCheck             *widget.Check
+	normalizeCheck          *widget.Check
+	contrastCheck           *widget.Check
+	adaptiveWindowCheck     *widget.Check
+	morphPostProcessCheck   *widget.Check
+	homomorphicCheck        *widget.Check
+	anisotropicCheck        *widget.Check
 }
 
 func NewParameterPanel(app *Application) *ParameterPanel {
@@ -32,215 +58,210 @@ func NewParameterPanel(app *Application) *ParameterPanel {
 		app: app,
 	}
 
-	pp.binder = NewParameterBinder(app)
-	pp.createWidgetGroups()
-	pp.setupBindings()
+	pp.widgets = NewParameterWidgets()
 	pp.buildLayout()
 	pp.setupParameterListener()
 
 	return pp
 }
 
-func (pp *ParameterPanel) createWidgetGroups() {
-	pp.basicWidgets = NewBasicParameterWidgets()
-	pp.algorithmWidgets = NewAlgorithmWidgets()
-	pp.methodWidgets = NewMethodWidgets()
-	pp.neighborhoodWidgets = NewNeighborhoodWidgets()
-	pp.preprocessWidgets = NewPreprocessingWidgets()
-	pp.postprocessWidgets = NewPostprocessingWidgets()
-}
+func NewParameterWidgets() *ParameterWidgets {
+	w := &ParameterWidgets{}
 
-func (pp *ParameterPanel) setupBindings() {
-	// Bind basic parameters
-	pp.binder.BindSlider(pp.basicWidgets.windowSizeSlider, pp.binder.GetWindowSizeBinding(), pp.basicWidgets.windowSizeLabel, FormatWindowSize)
-	pp.binder.BindSlider(pp.basicWidgets.histBinsSlider, pp.binder.GetHistogramBinsBinding(), pp.basicWidgets.histBinsLabel, FormatHistogramBins)
-	pp.binder.BindSlider(pp.basicWidgets.smoothingStrengthSlider, pp.binder.GetSmoothingStrengthBinding(), pp.basicWidgets.smoothingStrengthLabel, FormatSmoothingStrength)
+	w.processingMethodSelect = widget.NewSelect([]string{
+		"Single Scale",
+		"Multi-Scale Pyramid",
+		"Region Adaptive",
+	}, nil)
 
-	// Bind algorithm toggles
-	pp.binder.BindCheck(pp.algorithmWidgets.edgePreservationCheck, pp.binder.GetEdgePreservationBinding())
-	pp.binder.BindCheck(pp.algorithmWidgets.noiseRobustnessCheck, pp.binder.GetNoiseRobustnessBinding())
-	pp.binder.BindCheck(pp.algorithmWidgets.gaussianPreprocessCheck, pp.binder.GetGaussianPreprocessBinding())
-	pp.binder.BindCheck(pp.algorithmWidgets.useLogCheck, pp.binder.GetUseLogHistogramBinding())
-	pp.binder.BindCheck(pp.algorithmWidgets.normalizeCheck, pp.binder.GetNormalizeHistogramBinding())
-	pp.binder.BindCheck(pp.algorithmWidgets.contrastCheck, pp.binder.GetContrastEnhancementBinding())
+	w.windowSizeSlider = widget.NewSlider(3, 21)
+	w.windowSizeSlider.Step = 2
+	w.windowSizeSlider.SetValue(7)
+	w.windowSizeLabel = widget.NewLabel("Window Size: 7")
 
-	// Bind method parameters
-	pp.binder.BindSlider(pp.methodWidgets.pyramidLevelsSlider, pp.binder.GetPyramidLevelsBinding(), pp.methodWidgets.pyramidLevelsLabel, FormatPyramidLevels)
-	pp.binder.BindSlider(pp.methodWidgets.regionGridSlider, pp.binder.GetRegionGridSizeBinding(), pp.methodWidgets.regionGridLabel, FormatRegionGrid)
+	w.histBinsSlider = widget.NewSlider(0, 256)
+	w.histBinsSlider.SetValue(0)
+	w.histBinsLabel = widget.NewLabel("Histogram Bins: Auto")
 
-	// Bind neighborhood parameters
-	pp.binder.BindSelect(pp.neighborhoodWidgets.neighborhoodTypeSelect, pp.binder.GetNeighborhoodTypeBinding())
-	pp.binder.BindCheck(pp.neighborhoodWidgets.adaptiveWindowCheck, pp.binder.GetAdaptiveWindowBinding())
+	w.smoothingSlider = widget.NewSlider(0.0, 5.0)
+	w.smoothingSlider.SetValue(1.0)
+	w.smoothingLabel = widget.NewLabel("Smoothing Strength: 1.0")
 
-	// Bind preprocessing parameters
-	pp.binder.BindCheck(pp.preprocessWidgets.homomorphicCheck, pp.binder.GetHomomorphicFilteringBinding())
-	pp.binder.BindCheck(pp.preprocessWidgets.anisotropicCheck, pp.binder.GetAnisotropicDiffusionBinding())
-	pp.binder.BindSlider(pp.preprocessWidgets.diffusionIterSlider, pp.binder.GetDiffusionIterBinding(), pp.preprocessWidgets.diffusionIterLabel, FormatDiffusionIter)
-	pp.binder.BindSlider(pp.preprocessWidgets.diffusionKappaSlider, pp.binder.GetDiffusionKappaBinding(), pp.preprocessWidgets.diffusionKappaLabel, FormatDiffusionKappa)
+	w.pyramidLevelsSlider = widget.NewSlider(1, 5)
+	w.pyramidLevelsSlider.SetValue(3)
+	w.pyramidLevelsLabel = widget.NewLabel("Pyramid Levels: 3")
 
-	// Bind postprocessing parameters
-	pp.binder.BindSelect(pp.postprocessWidgets.interpolationSelect, pp.binder.GetInterpolationMethodBinding())
-	pp.binder.BindCheck(pp.postprocessWidgets.morphPostProcessCheck, pp.binder.GetMorphPostProcessBinding())
-	pp.binder.BindSlider(pp.postprocessWidgets.morphKernelSlider, pp.binder.GetMorphKernelSizeBinding(), pp.postprocessWidgets.morphKernelLabel, FormatMorphKernel)
+	w.regionGridSlider = widget.NewSlider(32, 256)
+	w.regionGridSlider.SetValue(64)
+	w.regionGridLabel = widget.NewLabel("Region Grid Size: 64")
 
-	// Setup special handlers
-	pp.setupSpecialHandlers()
-}
+	w.neighborhoodSelect = widget.NewSelect([]string{
+		"Rectangular",
+		"Circular",
+		"Distance Weighted",
+	}, nil)
+	w.neighborhoodSelect.SetSelected("Rectangular")
 
-func (pp *ParameterPanel) setupSpecialHandlers() {
-	// Processing method requires special handling
-	pp.methodWidgets.processingMethodSelect.OnChanged = func(method string) {
-		pp.handleProcessingMethodChange(method)
-	}
+	w.interpolationSelect = widget.NewSelect([]string{
+		"Nearest",
+		"Bilinear",
+		"Bicubic",
+	}, nil)
+	w.interpolationSelect.SetSelected("Bilinear")
 
-	// Toggle control visibility based on checkbox states
-	pp.postprocessWidgets.morphPostProcessCheck.OnChanged = func(checked bool) {
-		pp.toggleMorphologicalControls(checked)
-	}
+	w.morphKernelSlider = widget.NewSlider(1, 7)
+	w.morphKernelSlider.Step = 2
+	w.morphKernelSlider.SetValue(3)
+	w.morphKernelLabel = widget.NewLabel("Morphological Kernel: 3")
 
-	pp.preprocessWidgets.anisotropicCheck.OnChanged = func(checked bool) {
-		pp.toggleDiffusionControls(checked)
-	}
-}
+	w.diffusionIterSlider = widget.NewSlider(1, 20)
+	w.diffusionIterSlider.SetValue(5)
+	w.diffusionIterLabel = widget.NewLabel("Diffusion Iterations: 5")
 
-func (pp *ParameterPanel) setupParameterListener() {
-	pp.binder.AddParameterListener(func(params *OtsuParameters) {
-		// Debounce parameter changes to avoid excessive processing
-		now := time.Now()
-		if now.Sub(pp.lastProcessTime) < 100*time.Millisecond {
-			return
-		}
-		pp.lastProcessTime = now
+	w.diffusionKappaSlider = widget.NewSlider(10.0, 100.0)
+	w.diffusionKappaSlider.SetValue(30)
+	w.diffusionKappaLabel = widget.NewLabel("Diffusion Kappa: 30.0")
 
-		// Cancel any ongoing processing
-		if pp.processingCancel != nil {
-			pp.processingCancel()
-		}
+	w.edgePreservationCheck = widget.NewCheck("Edge Preservation", nil)
+	w.noiseRobustnessCheck = widget.NewCheck("Noise Robustness", nil)
+	w.gaussianPreprocessCheck = widget.NewCheck("Gaussian Preprocessing", nil)
+	w.gaussianPreprocessCheck.SetChecked(true)
+	w.useLogCheck = widget.NewCheck("Use Log Histogram", nil)
+	w.normalizeCheck = widget.NewCheck("Normalize Histogram", nil)
+	w.normalizeCheck.SetChecked(true)
+	w.contrastCheck = widget.NewCheck("Adaptive Contrast Enhancement", nil)
+	w.adaptiveWindowCheck = widget.NewCheck("Adaptive Window Sizing", nil)
+	w.morphPostProcessCheck = widget.NewCheck("Morphological Post-Processing", nil)
+	w.homomorphicCheck = widget.NewCheck("Homomorphic Filtering", nil)
+	w.anisotropicCheck = widget.NewCheck("Anisotropic Diffusion", nil)
 
-		// Start new processing with timeout
-		pp.processingCtx, pp.processingCancel = context.WithCancel(context.Background())
-		go pp.triggerProcessing(pp.processingCtx, params)
-	})
-}
-
-func (pp *ParameterPanel) triggerProcessing(ctx context.Context, params *OtsuParameters) {
-	// Wait a bit to batch rapid parameter changes
-	select {
-	case <-time.After(200 * time.Millisecond):
-		// Proceed with processing
-	case <-ctx.Done():
-		return // Cancelled
-	}
-
-	// Check if we still have an image to process
-	if pp.app.processing.GetOriginalImage() == nil {
-		return
-	}
-
-	// Trigger processing through the toolbar
-	fyne.Do(func() {
-		pp.app.toolbar.handleProcessImageWithParams(params)
-	})
-}
-
-func (pp *ParameterPanel) handleProcessingMethodChange(method string) {
-	pp.binder.UpdateProcessingMethodDependencies(method)
-	pp.updateMethodVisibility(method)
-
-	// Debug trace parameter change
-	DebugTraceParam("ProcessingMethod", pp.getLastProcessingMethod(), method)
-}
-
-func (pp *ParameterPanel) getLastProcessingMethod() string {
-	params := pp.binder.GetCurrentParameters()
-	if params.MultiScaleProcessing {
-		return "Multi-Scale Pyramid"
-	} else if params.RegionAdaptiveThresholding {
-		return "Region Adaptive"
-	}
-	return "Single Scale"
-}
-
-func (pp *ParameterPanel) updateMethodVisibility(method string) {
-	switch method {
-	case "Multi-Scale Pyramid":
-		pp.methodWidgets.pyramidLevelsSlider.Show()
-		pp.methodWidgets.pyramidLevelsLabel.Show()
-		pp.methodWidgets.regionGridSlider.Hide()
-		pp.methodWidgets.regionGridLabel.Hide()
-	case "Region Adaptive":
-		pp.methodWidgets.pyramidLevelsSlider.Hide()
-		pp.methodWidgets.pyramidLevelsLabel.Hide()
-		pp.methodWidgets.regionGridSlider.Show()
-		pp.methodWidgets.regionGridLabel.Show()
-	default:
-		pp.methodWidgets.pyramidLevelsSlider.Hide()
-		pp.methodWidgets.pyramidLevelsLabel.Hide()
-		pp.methodWidgets.regionGridSlider.Hide()
-		pp.methodWidgets.regionGridLabel.Hide()
-	}
-}
-
-func (pp *ParameterPanel) toggleMorphologicalControls(enabled bool) {
-	if enabled {
-		pp.postprocessWidgets.morphKernelSlider.Show()
-		pp.postprocessWidgets.morphKernelLabel.Show()
-	} else {
-		pp.postprocessWidgets.morphKernelSlider.Hide()
-		pp.postprocessWidgets.morphKernelLabel.Hide()
-	}
-}
-
-func (pp *ParameterPanel) toggleDiffusionControls(enabled bool) {
-	if enabled {
-		pp.preprocessWidgets.diffusionIterSlider.Show()
-		pp.preprocessWidgets.diffusionIterLabel.Show()
-		pp.preprocessWidgets.diffusionKappaSlider.Show()
-		pp.preprocessWidgets.diffusionKappaLabel.Show()
-	} else {
-		pp.preprocessWidgets.diffusionIterSlider.Hide()
-		pp.preprocessWidgets.diffusionIterLabel.Hide()
-		pp.preprocessWidgets.diffusionKappaSlider.Hide()
-		pp.preprocessWidgets.diffusionKappaLabel.Hide()
-	}
+	return w
 }
 
 func (pp *ParameterPanel) buildLayout() {
-	// Create sections using widget groups
-	basicSection := pp.basicWidgets.CreateSection()
-	methodSection := pp.methodWidgets.CreateSection()
-	neighborhoodSection := pp.neighborhoodWidgets.CreateSection()
-	algorithmSection := pp.algorithmWidgets.CreateSection()
-	preprocessingSection := pp.preprocessWidgets.CreateSection()
-	postprocessingSection := pp.postprocessWidgets.CreateSection()
+	basicSection := container.NewVBox(
+		widget.NewLabel("Basic Parameters"),
+		widget.NewSeparator(),
+		container.NewHBox(
+			container.NewVBox(pp.widgets.windowSizeLabel, pp.widgets.windowSizeSlider),
+			container.NewVBox(pp.widgets.histBinsLabel, pp.widgets.histBinsSlider),
+			container.NewVBox(pp.widgets.smoothingLabel, pp.widgets.smoothingSlider),
+		),
+	)
 
-	// Create scrollable container with all sections
+	methodSection := container.NewVBox(
+		widget.NewLabel("Processing Method"),
+		widget.NewSeparator(),
+		pp.widgets.processingMethodSelect,
+		container.NewHBox(
+			container.NewVBox(pp.widgets.pyramidLevelsLabel, pp.widgets.pyramidLevelsSlider),
+			container.NewVBox(pp.widgets.regionGridLabel, pp.widgets.regionGridSlider),
+		),
+	)
+
+	algorithmSection := container.NewVBox(
+		widget.NewLabel("Algorithm Options"),
+		widget.NewSeparator(),
+		container.NewHBox(
+			pp.widgets.edgePreservationCheck,
+			pp.widgets.noiseRobustnessCheck,
+		),
+		container.NewHBox(
+			pp.widgets.gaussianPreprocessCheck,
+			pp.widgets.useLogCheck,
+		),
+		container.NewHBox(
+			pp.widgets.normalizeCheck,
+			pp.widgets.contrastCheck,
+		),
+	)
+
 	allSections := container.NewVBox(
 		basicSection,
 		methodSection,
-		neighborhoodSection,
 		algorithmSection,
-		preprocessingSection,
-		postprocessingSection,
 	)
 
 	scroll := container.NewScroll(allSections)
 	scroll.SetMinSize(fyne.NewSize(800, 400))
 	pp.container = container.NewBorder(nil, nil, nil, nil, scroll)
 
-	pp.setInitialValues()
+	pp.widgets.processingMethodSelect.SetSelected("Single Scale")
 }
 
-func (pp *ParameterPanel) setInitialValues() {
-	// Set default values and initial visibility
-	pp.methodWidgets.processingMethodSelect.SetSelected("Single Scale")
-	pp.toggleMorphologicalControls(false)
-	pp.toggleDiffusionControls(false)
-	pp.updateMethodVisibility("Single Scale")
+func (pp *ParameterPanel) setupParameterListener() {
+	pp.widgets.windowSizeSlider.OnChanged = func(value float64) {
+		intVal := int(value)
+		if intVal%2 == 0 {
+			intVal++
+		}
+		pp.widgets.windowSizeLabel.SetText(fmt.Sprintf("Window Size: %d", intVal))
+		pp.triggerParameterChange()
+	}
+}
+
+func (pp *ParameterPanel) triggerParameterChange() {
+	now := time.Now()
+	if now.Sub(pp.lastProcessTime) < 100*time.Millisecond {
+		return
+	}
+	pp.lastProcessTime = now
+
+	if pp.processingCancel != nil {
+		pp.processingCancel()
+	}
+
+	pp.processingCtx, pp.processingCancel = context.WithCancel(context.Background())
+	go pp.delayedProcessing(pp.processingCtx)
+}
+
+func (pp *ParameterPanel) delayedProcessing(ctx context.Context) {
+	select {
+	case <-time.After(200 * time.Millisecond):
+	case <-ctx.Done():
+		return
+	}
+
+	if pp.app.processing.GetOriginalImage() == nil {
+		return
+	}
+
+	params := pp.GetCurrentParameters()
+	fyne.Do(func() {
+		pp.app.toolbar.handleProcessImageWithParams(params)
+	})
 }
 
 func (pp *ParameterPanel) GetCurrentParameters() *OtsuParameters {
-	return pp.binder.GetCurrentParameters()
+	windowSize := int(pp.widgets.windowSizeSlider.Value)
+	if windowSize%2 == 0 {
+		windowSize++
+	}
+
+	return &OtsuParameters{
+		WindowSize:                 windowSize,
+		HistogramBins:              int(pp.widgets.histBinsSlider.Value),
+		SmoothingStrength:          pp.widgets.smoothingSlider.Value,
+		EdgePreservation:           pp.widgets.edgePreservationCheck.Checked,
+		NoiseRobustness:            pp.widgets.noiseRobustnessCheck.Checked,
+		GaussianPreprocessing:      pp.widgets.gaussianPreprocessCheck.Checked,
+		UseLogHistogram:            pp.widgets.useLogCheck.Checked,
+		NormalizeHistogram:         pp.widgets.normalizeCheck.Checked,
+		ApplyContrastEnhancement:   pp.widgets.contrastCheck.Checked,
+		AdaptiveWindowSizing:       pp.widgets.adaptiveWindowCheck.Checked,
+		MultiScaleProcessing:       pp.widgets.processingMethodSelect.Selected == "Multi-Scale Pyramid",
+		PyramidLevels:              int(pp.widgets.pyramidLevelsSlider.Value),
+		NeighborhoodType:           pp.widgets.neighborhoodSelect.Selected,
+		InterpolationMethod:        pp.widgets.interpolationSelect.Selected,
+		MorphologicalPostProcess:   pp.widgets.morphPostProcessCheck.Checked,
+		MorphologicalKernelSize:    int(pp.widgets.morphKernelSlider.Value),
+		HomomorphicFiltering:       pp.widgets.homomorphicCheck.Checked,
+		AnisotropicDiffusion:       pp.widgets.anisotropicCheck.Checked,
+		DiffusionIterations:        int(pp.widgets.diffusionIterSlider.Value),
+		DiffusionKappa:             pp.widgets.diffusionKappaSlider.Value,
+		RegionAdaptiveThresholding: pp.widgets.processingMethodSelect.Selected == "Region Adaptive",
+		RegionGridSize:             int(pp.widgets.regionGridSlider.Value),
+	}
 }
 
 func (pp *ParameterPanel) GetContainer() *fyne.Container {

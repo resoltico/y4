@@ -106,10 +106,9 @@ func (iv *ImageViewer) updateViewMode(mode string) {
 	case "Processed Only":
 		iv.splitView.SetOffset(0.0)
 	case "Overlay Comparison":
-		// For overlay mode, we'll show both images with transparency
 		iv.splitView.SetOffset(0.5)
 		iv.createOverlayView()
-	default: // "Side by Side"
+	default:
 		iv.splitView.SetOffset(0.5)
 	}
 }
@@ -132,8 +131,6 @@ func (iv *ImageViewer) createOverlayView() {
 		return
 	}
 
-	// Create a simple overlay by showing both images with visual indicators
-	// This is a simplified overlay - for true overlay, we'd need to composite the images
 	iv.originalImage.FillMode = canvas.ImageFillOriginal
 	iv.processedImage.FillMode = canvas.ImageFillOriginal
 }
@@ -143,7 +140,6 @@ func (iv *ImageViewer) SetOriginalImage(img image.Image) {
 	iv.originalImage.Refresh()
 
 	if img != nil {
-		// Reset zoom when new image is loaded
 		iv.zoomSlider.SetValue(1.0)
 		iv.updateZoom(1.0)
 	}

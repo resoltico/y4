@@ -1,118 +1,169 @@
 package main
 
 import (
+	"fmt"
 	"image"
-	"math"
 
 	"gocv.io/x/gocv"
 )
 
-func (pe *ProcessingEngine) calculateAdaptiveWindowSize(src gocv.Mat) int {
-	rows, cols := src.Rows(), src.Cols()
+type ValidationError struct {
+	Context string
+	Field   string
+	Value   interface{}
+	Reason  string
+}
 
-	var intensity float64
-	totalPixels := rows * cols
+func (ve *ValidationError) Error() string {
+	return fmt.Sprintf("%s: invalid %s value %v - %s", ve.Context, ve.Field, ve.Value, ve.Reason)
+}
 
-	for y := 0; y < rows; y++ {
-		for x := 0; x < cols; x++ {
-			intensity += float64(src.GetUCharAt(y, x))
+func validateMat(mat gocv.Mat, context string) error {
+	if mat.Empty() {
+		return fmt.Errorf("%s: matrix is empty", context)
+	}
+	if mat.Rows() <= 0 || mat.Cols() <= 0 {
+		return fmt.Errorf("%s: invalid dimensions %dx%d", context, mat.Rows(), mat.Cols())
+	}
+	return nil
+}
+
+func validateMatDimensions(mat1, mat2 gocv.Mat, context string) error {
+	if mat1.Rows() != mat2.Rows() || mat1.Cols() != mat2.Cols() {
+		return fmt.Errorf("%s: dimension mismatch %dx%d vs %dx%d",
+			context, mat1.Rows(), mat1.Cols(), mat2.Rows(), mat2.Cols())
+	}
+	return nil
+}
+
+func validateImageMat(mat gocv.Mat, context string) error {
+	if mat.Empty() {
+		return &ValidationError{
+			Context: context,
+			Field:   "image",
+			Value:   "empty",
+			Reason:  "matrix contains no data",
 		}
 	}
 
-	meanIntensity := intensity / float64(totalPixels)
+	rows := mat.Rows()
+	cols := mat.Cols()
 
-	var variance float64
-	for y := 0; y < rows; y++ {
-		for x := 0; x < cols; x++ {
-			diff := float64(src.GetUCharAt(y, x)) - meanIntensity
-			variance += diff * diff
+	if rows <= 0 || cols <= 0 {
+		return &ValidationError{
+			Context: context,
+			Field:   "dimensions",
+			Value:   fmt.Sprintf("%dx%d", cols, rows),
+			Reason:  "width and height must be positive",
 		}
 	}
-	variance /= float64(totalPixels)
 
-	baseWindow := 7
-	varianceScale := variance / 1000.0
-	adaptiveWindow := int(float64(baseWindow) * (1.0 + varianceScale))
-
-	if adaptiveWindow%2 == 0 {
-		adaptiveWindow++
+	if rows < 3 || cols < 3 {
+		return &ValidationError{
+			Context: context,
+			Field:   "dimensions",
+			Value:   fmt.Sprintf("%dx%d", cols, rows),
+			Reason:  "minimum size 3x3 required for processing",
+		}
 	}
 
-	return max(3, min(adaptiveWindow, 21))
-}
-
-func (pe *ProcessingEngine) calculateNeighborhood(src gocv.Mat, windowSize int, neighborhoodType string) gocv.Mat {
-	switch neighborhoodType {
-	case "circular":
-		return pe.calculateCircularNeighborhood(src, windowSize)
-	case "distance_weighted":
-		return pe.calculateDistanceWeightedNeighborhood(src, windowSize)
-	default:
-		return pe.calculateRectangularNeighborhood(src, windowSize)
+	matType := mat.Type()
+	if matType != gocv.MatTypeCV8UC1 && matType != gocv.MatTypeCV8UC3 && matType != gocv.MatTypeCV8UC4 {
+		return &ValidationError{
+			Context: context,
+			Field:   "type",
+			Value:   matType,
+			Reason:  "only 8-bit unsigned images supported",
+		}
 	}
+
+	return nil
 }
 
-func (pe *ProcessingEngine) calculateRectangularNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
-	dst := gocv.NewMat()
-	kernel := gocv.GetStructuringElement(gocv.MorphRect, image.Point{X: windowSize, Y: windowSize})
-	defer kernel.Close()
-	gocv.MorphologyEx(src, &dst, gocv.MorphOpen, kernel)
-	return dst
+func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
+	if params == nil {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "params",
+			Value:   nil,
+			Reason:  "parameters object is nil",
+		}
+	}
+
+	width, height := imageSize[0], imageSize[1]
+
+	if params.WindowSize < 3 || params.WindowSize > 21 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
+			Reason:  "must be between 3 and 21",
+		}
+	}
+
+	if params.WindowSize%2 == 0 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
+			Reason:  "must be odd number",
+		}
+	}
+
+	if params.WindowSize >= min(width, height) {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "WindowSize",
+			Value:   params.WindowSize,
+			Reason:  fmt.Sprintf("must be smaller than image dimensions %dx%d", width, height),
+		}
+	}
+
+	if params.HistogramBins < 0 || params.HistogramBins > 256 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "HistogramBins",
+			Value:   params.HistogramBins,
+			Reason:  "must be 0 (auto) or between 1 and 256",
+		}
+	}
+
+	if params.SmoothingStrength < 0.0 || params.SmoothingStrength > 10.0 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "SmoothingStrength",
+			Value:   params.SmoothingStrength,
+			Reason:  "must be between 0.0 and 10.0",
+		}
+	}
+
+	if params.PyramidLevels < 1 || params.PyramidLevels > 8 {
+		return &ValidationError{
+			Context: "parameter validation",
+			Field:   "PyramidLevels",
+			Value:   params.PyramidLevels,
+			Reason:  "must be between 1 and 8",
+		}
+	}
+
+	return nil
 }
 
-func (pe *ProcessingEngine) calculateCircularNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
-	dst := gocv.NewMat()
-	kernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Point{X: windowSize, Y: windowSize})
-	defer kernel.Close()
-	gocv.MorphologyEx(src, &dst, gocv.MorphOpen, kernel)
-	return dst
-}
+func validateContourData(contours [][]image.Point, context string) error {
+	if len(contours) == 0 {
+		return nil
+	}
 
-func (pe *ProcessingEngine) calculateDistanceWeightedNeighborhood(src gocv.Mat, windowSize int) gocv.Mat {
-	rows, cols := src.Rows(), src.Cols()
-	dst := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
-
-	radius := windowSize / 2
-
-	for y := 0; y < rows; y++ {
-		for x := 0; x < cols; x++ {
-			var weightedSum, totalWeight float64
-
-			for dy := -radius; dy <= radius; dy++ {
-				for dx := -radius; dx <= radius; dx++ {
-					ny, nx := y+dy, x+dx
-					if ny >= 0 && ny < rows && nx >= 0 && nx < cols {
-						distance := math.Sqrt(float64(dx*dx + dy*dy))
-						if distance <= float64(radius) {
-							weight := 1.0 / (1.0 + distance)
-							pixel := float64(src.GetUCharAt(ny, nx))
-							weightedSum += pixel * weight
-							totalWeight += weight
-						}
-					}
-				}
+	for i, contour := range contours {
+		if len(contour) < 3 {
+			return &ValidationError{
+				Context: context,
+				Field:   "contour_points",
+				Value:   fmt.Sprintf("contour %d has %d points", i, len(contour)),
+				Reason:  "contours must have at least 3 points",
 			}
-
-			if totalWeight > 0 {
-				dst.SetUCharAt(y, x, uint8(weightedSum/totalWeight))
-			} else {
-				dst.SetUCharAt(y, x, src.GetUCharAt(y, x))
-			}
 		}
 	}
 
-	return dst
-}
-
-func (pe *ProcessingEngine) calculateHistogramBins(src gocv.Mat) int {
-	rows := src.Rows()
-	cols := src.Cols()
-	totalPixels := rows * cols
-
-	if totalPixels > 1000000 {
-		return 128
-	} else if totalPixels < 100000 {
-		return 32
-	}
-	return 64
+	return nil
 }

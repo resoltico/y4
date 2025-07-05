@@ -31,13 +31,6 @@ type ParameterSnapshot struct {
 	Parameters  *OtsuParameters `json:"parameters"`
 }
 
-type ParameterFlow struct {
-	UIToEngine time.Duration `json:"ui_to_engine_ms"`
-	Validation time.Duration `json:"validation_ms"`
-	Processing time.Duration `json:"processing_ms"`
-	TotalFlow  time.Duration `json:"total_flow_ms"`
-}
-
 func NewParameterTracer(logger *slog.Logger) *ParameterTracer {
 	return &ParameterTracer{
 		logger:           logger,
@@ -92,16 +85,6 @@ func (pt *ParameterTracer) TraceParameterChange(field string, oldValue, newValue
 	)
 }
 
-func (pt *ParameterTracer) TraceParameterFlow(operationID int64, flow ParameterFlow) {
-	pt.logger.Info("parameter flow analysis",
-		"operation_id", operationID,
-		"ui_to_engine_ms", flow.UIToEngine.Milliseconds(),
-		"validation_ms", flow.Validation.Milliseconds(),
-		"processing_ms", flow.Processing.Milliseconds(),
-		"total_flow_ms", flow.TotalFlow.Milliseconds(),
-	)
-}
-
 func (pt *ParameterTracer) GetParameterHistory(field string) []ParameterChange {
 	pt.mutex.RLock()
 	defer pt.mutex.RUnlock()
@@ -130,14 +113,12 @@ func (pt *ParameterTracer) AnalyzeParameterPatterns() map[string]interface{} {
 
 	analysis := make(map[string]interface{})
 
-	// Analyze change frequency per field
 	changeFreq := make(map[string]int)
 	for field, changes := range pt.parameterHistory {
 		changeFreq[field] = len(changes)
 	}
 	analysis["change_frequency"] = changeFreq
 
-	// Analyze most recently changed parameters
 	recentChanges := make(map[string]time.Time)
 	for field, changes := range pt.parameterHistory {
 		if len(changes) > 0 {
@@ -146,7 +127,6 @@ func (pt *ParameterTracer) AnalyzeParameterPatterns() map[string]interface{} {
 	}
 	analysis["recent_changes"] = recentChanges
 
-	// Analyze parameter combinations
 	methodCombinations := make(map[string]int)
 	for _, snapshot := range pt.operationParams {
 		key := pt.generateParameterKey(snapshot.Parameters)
@@ -187,65 +167,6 @@ func (pt *ParameterTracer) DumpParameterHistory() {
 			)
 		}
 	}
-}
-
-func (pt *ParameterTracer) ValidateParameterIntegrity(operationID int64, actualParams *OtsuParameters) bool {
-	pt.mutex.RLock()
-	defer pt.mutex.RUnlock()
-
-	snapshot, exists := pt.operationParams[operationID]
-	if !exists {
-		pt.logger.Warn("parameter integrity check failed",
-			"operation_id", operationID,
-			"reason", "no snapshot found",
-		)
-		return false
-	}
-
-	discrepancies := pt.compareParameters(snapshot.Parameters, actualParams)
-	if len(discrepancies) > 0 {
-		pt.logger.Error("parameter integrity violation",
-			"operation_id", operationID,
-			"discrepancies", discrepancies,
-		)
-		return false
-	}
-
-	pt.logger.Debug("parameter integrity verified",
-		"operation_id", operationID,
-	)
-	return true
-}
-
-func (pt *ParameterTracer) compareParameters(expected, actual *OtsuParameters) []string {
-	var discrepancies []string
-
-	if expected.WindowSize != actual.WindowSize {
-		discrepancies = append(discrepancies, fmt.Sprintf("WindowSize: expected %d, got %d", expected.WindowSize, actual.WindowSize))
-	}
-	if expected.HistogramBins != actual.HistogramBins {
-		discrepancies = append(discrepancies, fmt.Sprintf("HistogramBins: expected %d, got %d", expected.HistogramBins, actual.HistogramBins))
-	}
-	if expected.SmoothingStrength != actual.SmoothingStrength {
-		discrepancies = append(discrepancies, fmt.Sprintf("SmoothingStrength: expected %.2f, got %.2f", expected.SmoothingStrength, actual.SmoothingStrength))
-	}
-	if expected.MultiScaleProcessing != actual.MultiScaleProcessing {
-		discrepancies = append(discrepancies, fmt.Sprintf("MultiScaleProcessing: expected %t, got %t", expected.MultiScaleProcessing, actual.MultiScaleProcessing))
-	}
-	if expected.RegionAdaptiveThresholding != actual.RegionAdaptiveThresholding {
-		discrepancies = append(discrepancies, fmt.Sprintf("RegionAdaptiveThresholding: expected %t, got %t", expected.RegionAdaptiveThresholding, actual.RegionAdaptiveThresholding))
-	}
-	if expected.NeighborhoodType != actual.NeighborhoodType {
-		discrepancies = append(discrepancies, fmt.Sprintf("NeighborhoodType: expected %s, got %s", expected.NeighborhoodType, actual.NeighborhoodType))
-	}
-	if expected.PyramidLevels != actual.PyramidLevels {
-		discrepancies = append(discrepancies, fmt.Sprintf("PyramidLevels: expected %d, got %d", expected.PyramidLevels, actual.PyramidLevels))
-	}
-	if expected.RegionGridSize != actual.RegionGridSize {
-		discrepancies = append(discrepancies, fmt.Sprintf("RegionGridSize: expected %d, got %d", expected.RegionGridSize, actual.RegionGridSize))
-	}
-
-	return discrepancies
 }
 
 func (pt *ParameterTracer) cloneParameters(params *OtsuParameters) *OtsuParameters {
