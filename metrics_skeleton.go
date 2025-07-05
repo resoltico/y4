@@ -6,7 +6,7 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result gocv.Mat) {
+func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result gocv.Mat) error {
 	gtSkeleton := m.extractSkeleton(groundTruth)
 	defer gtSkeleton.Close()
 	resSkeleton := m.extractSkeleton(result)
@@ -14,35 +14,38 @@ func (m *BinaryImageMetrics) calculateSkeletonSimilarity(groundTruth, result goc
 
 	if gtSkeleton.Empty() || resSkeleton.Empty() {
 		m.skeletonValue = 0.0
-		return
+		return nil
 	}
 
-	intersection := gocv.NewMat()
+	intersection, err := performMatrixOperation(gtSkeleton, resSkeleton, "and")
+	if err != nil {
+		return err
+	}
 	defer intersection.Close()
-	gocv.BitwiseAnd(gtSkeleton, resSkeleton, &intersection)
 
-	unionMat := gocv.NewMat()
-	defer unionMat.Close()
-	gocv.BitwiseOr(gtSkeleton, resSkeleton, &unionMat)
-
-	intersectionPixels, err := safeCountNonZero(intersection, "skeleton intersection")
+	unionMat, err := performMatrixOperation(gtSkeleton, resSkeleton, "or")
 	if err != nil {
-		m.skeletonValue = 0.0
-		return
+		return err
+	}
+	defer unionMat.Close()
+
+	intersectionPixels, err := calculateSafeCountNonZero(intersection, "skeleton intersection")
+	if err != nil {
+		return err
 	}
 
-	unionPixels, err := safeCountNonZero(unionMat, "skeleton union")
+	unionPixels, err := calculateSafeCountNonZero(unionMat, "skeleton union")
 	if err != nil {
-		m.skeletonValue = 0.0
-		return
+		return err
 	}
 
 	if unionPixels == 0 {
 		m.skeletonValue = 0.0
-		return
+		return nil
 	}
 
 	m.skeletonValue = float64(intersectionPixels) / float64(unionPixels)
+	return nil
 }
 
 func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
@@ -50,19 +53,13 @@ func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
 		return gocv.NewMat()
 	}
 
-	var gray gocv.Mat
-	if src.Channels() > 1 {
-		gray = gocv.NewMat()
-		defer gray.Close()
-		gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
-	} else {
-		gray = src
+	binary, err := ensureBinaryThresholded(src, "skeleton extraction")
+	if err != nil {
+		return gocv.NewMat()
 	}
+	defer binary.Close()
 
-	binary := gocv.NewMat()
-	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
-
-	skeleton := gocv.NewMatWithSize(gray.Rows(), gray.Cols(), gocv.MatTypeCV8UC1)
+	skeleton := gocv.NewMatWithSize(binary.Rows(), binary.Cols(), gocv.MatTypeCV8UC1)
 	zeros := gocv.NewScalar(0, 0, 0, 0)
 	skeleton.SetTo(zeros)
 
@@ -72,19 +69,26 @@ func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
 	element := gocv.GetStructuringElement(gocv.MorphCross, image.Point{X: 3, Y: 3})
 	defer element.Close()
 
-	for {
-		gocv.MorphologyEx(binary, &temp, gocv.MorphOpen, element)
-		gocv.BitwiseNot(temp, &temp)
-		gocv.BitwiseAnd(binary, temp, &temp)
-		gocv.BitwiseOr(skeleton, temp, &skeleton)
-		gocv.MorphologyEx(binary, &binary, gocv.MorphErode, element)
+	workingCopy := binary.Clone()
+	defer workingCopy.Close()
 
-		nonZeroCount, err := safeCountNonZero(binary, "skeleton iteration")
+	maxIterations := 100
+	iteration := 0
+
+	for iteration < maxIterations {
+		gocv.MorphologyEx(workingCopy, &temp, gocv.MorphOpen, element)
+		gocv.BitwiseNot(temp, &temp)
+		gocv.BitwiseAnd(workingCopy, temp, &temp)
+		gocv.BitwiseOr(skeleton, temp, &skeleton)
+		gocv.MorphologyEx(workingCopy, &workingCopy, gocv.MorphErode, element)
+
+		nonZeroCount, err := calculateSafeCountNonZero(workingCopy, "skeleton iteration")
 		if err != nil || nonZeroCount == 0 {
 			break
 		}
+
+		iteration++
 	}
 
-	binary.Close()
 	return skeleton
 }

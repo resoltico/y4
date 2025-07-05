@@ -6,9 +6,21 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
-	rows := groundTruth.Rows()
-	cols := groundTruth.Cols()
+func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) error {
+	gtBinary, err := ensureBinaryThresholded(groundTruth, "DRD ground truth")
+	if err != nil {
+		return err
+	}
+	defer gtBinary.Close()
+
+	resBinary, err := ensureBinaryThresholded(result, "DRD result")
+	if err != nil {
+		return err
+	}
+	defer resBinary.Close()
+
+	rows := gtBinary.Rows()
+	cols := gtBinary.Cols()
 
 	weightMatrix := m.createDRDWeightMatrix()
 
@@ -17,12 +29,12 @@ func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
 
 	for y := 0; y < rows; y++ {
 		for x := 0; x < cols; x++ {
-			gtValue := groundTruth.GetUCharAt(y, x) > 127
-			resValue := result.GetUCharAt(y, x) > 127
+			gtValue := gtBinary.GetUCharAt(y, x) > 127
+			resValue := resBinary.GetUCharAt(y, x) > 127
 
 			if gtValue != resValue {
 				totalErrorPixels++
-				distortion := m.calculatePixelDRD(groundTruth, x, y, weightMatrix)
+				distortion := m.calculatePixelDRD(gtBinary, x, y, weightMatrix)
 				totalDistortion += distortion
 			}
 		}
@@ -30,13 +42,13 @@ func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
 
 	if totalErrorPixels == 0 {
 		m.drdValue = 0.0
-		return
+		return nil
 	}
 
 	totalForegroundPixels := 0
 	for y := 0; y < rows; y++ {
 		for x := 0; x < cols; x++ {
-			if groundTruth.GetUCharAt(y, x) > 127 {
+			if gtBinary.GetUCharAt(y, x) > 127 {
 				totalForegroundPixels++
 			}
 		}
@@ -44,10 +56,11 @@ func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) {
 
 	if totalForegroundPixels == 0 {
 		m.drdValue = 0.0
-		return
+		return nil
 	}
 
 	m.drdValue = totalDistortion / float64(totalForegroundPixels)
+	return nil
 }
 
 func (m *BinaryImageMetrics) createDRDWeightMatrix() [][]float64 {
@@ -106,9 +119,21 @@ func (m *BinaryImageMetrics) calculatePixelDRD(groundTruth gocv.Mat, x, y int, w
 	return weightedSum / totalWeight
 }
 
-func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, result gocv.Mat) {
-	rows := groundTruth.Rows()
-	cols := groundTruth.Cols()
+func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, result gocv.Mat) error {
+	gtBinary, err := ensureBinaryThresholded(groundTruth, "BFC ground truth")
+	if err != nil {
+		return err
+	}
+	defer gtBinary.Close()
+
+	resBinary, err := ensureBinaryThresholded(result, "BFC result")
+	if err != nil {
+		return err
+	}
+	defer resBinary.Close()
+
+	rows := gtBinary.Rows()
+	cols := gtBinary.Cols()
 
 	backgroundErrors := 0
 	foregroundErrors := 0
@@ -117,8 +142,8 @@ func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, 
 
 	for y := 0; y < rows; y++ {
 		for x := 0; x < cols; x++ {
-			gtValue := groundTruth.GetUCharAt(y, x) > 127
-			resValue := result.GetUCharAt(y, x) > 127
+			gtValue := gtBinary.GetUCharAt(y, x) > 127
+			resValue := resBinary.GetUCharAt(y, x) > 127
 
 			if gtValue {
 				totalForeground++
@@ -145,4 +170,5 @@ func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, 
 	}
 
 	m.pbcValue = (backgroundClutter + foregroundSpeckle) / 2.0
+	return nil
 }

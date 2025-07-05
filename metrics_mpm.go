@@ -7,13 +7,20 @@ import (
 	"gocv.io/x/gocv"
 )
 
-func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
-	gtContours := m.extractContoursWithValidation(groundTruth, "ground truth")
-	resContours := m.extractContoursWithValidation(result, "result")
+func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) error {
+	gtContours, err := m.extractContoursWithValidation(groundTruth, "MPM ground truth")
+	if err != nil {
+		return err
+	}
+
+	resContours, err := m.extractContoursWithValidation(result, "MPM result")
+	if err != nil {
+		return err
+	}
 
 	if len(gtContours) == 0 && len(resContours) == 0 {
 		m.mpmValue = 0.0
-		return
+		return nil
 	}
 
 	totalMismatch := 0.0
@@ -73,29 +80,23 @@ func (m *BinaryImageMetrics) calculateMPM(groundTruth, result gocv.Mat) {
 
 	if totalObjects == 0 {
 		m.mpmValue = 0.0
-		return
+		return nil
 	}
 
 	m.mpmValue = totalMismatch / float64(totalObjects)
+	return nil
 }
 
-func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context string) [][]image.Point {
-	if err := validateMat(mat, context); err != nil {
-		return [][]image.Point{}
+func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context string) ([][]image.Point, error) {
+	if err := validateMatForMetrics(mat, context); err != nil {
+		return [][]image.Point{}, err
 	}
 
-	var gray gocv.Mat
-	if mat.Channels() > 1 {
-		gray = gocv.NewMat()
-		defer gray.Close()
-		gocv.CvtColor(mat, &gray, gocv.ColorBGRToGray)
-	} else {
-		gray = mat
+	binary, err := ensureBinaryThresholded(mat, context)
+	if err != nil {
+		return [][]image.Point{}, err
 	}
-
-	binary := gocv.NewMat()
 	defer binary.Close()
-	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -106,13 +107,13 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 	contours := gocv.FindContours(binary, gocv.RetrievalExternal, gocv.ChainApproxSimple)
 
 	if contours.IsNil() {
-		return [][]image.Point{}
+		return [][]image.Point{}, nil
 	}
+	defer contours.Close()
 
 	size := contours.Size()
 	if size == 0 {
-		contours.Close()
-		return [][]image.Point{}
+		return [][]image.Point{}, nil
 	}
 
 	result := make([][]image.Point, 0, size)
@@ -126,8 +127,7 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 		}
 	}
 
-	contours.Close()
-	return result
+	return result, nil
 }
 
 func (m *BinaryImageMetrics) calculateContourDistance(contour1, contour2 []image.Point) float64 {

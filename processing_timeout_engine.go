@@ -31,6 +31,10 @@ func (pe *ProcessingEngine) calculateTimeout(params *OtsuParameters) time.Durati
 }
 
 func (pe *ProcessingEngine) processImageSafely(ctx context.Context, params *OtsuParameters) (*ImageData, *BinaryImageMetrics, error) {
+	if err := validateProcessingInputs(pe.originalImage, params); err != nil {
+		return nil, nil, fmt.Errorf("input validation: %w", err)
+	}
+
 	gray := pe.convertToGrayscale(pe.originalImage.Mat)
 	defer gray.Close()
 
@@ -61,6 +65,12 @@ func (pe *ProcessingEngine) processImageSafely(ctx context.Context, params *Otsu
 		working = enhanced
 	}
 
+	select {
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	default:
+	}
+
 	var result gocv.Mat
 	if params.MultiScaleProcessing {
 		result = pe.processMultiScale(working, params)
@@ -77,6 +87,12 @@ func (pe *ProcessingEngine) processImageSafely(ctx context.Context, params *Otsu
 		result = morphed
 	}
 
+	select {
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	default:
+	}
+
 	resultImage := pe.matToImage(result)
 
 	processedData := &ImageData{
@@ -90,9 +106,13 @@ func (pe *ProcessingEngine) processImageSafely(ctx context.Context, params *Otsu
 
 	pe.processedImage = processedData
 
-	metrics := CalculateBinaryMetrics(pe.originalImage.Mat, result)
-	if metrics == nil {
-		return processedData, nil, fmt.Errorf("metrics calculation failed")
+	metrics, err := CalculateBinaryMetrics(gray, result)
+	if err != nil {
+		return processedData, nil, fmt.Errorf("metrics calculation: %w", err)
+	}
+
+	if err := validateProcessingResult(processedData, metrics); err != nil {
+		return processedData, metrics, fmt.Errorf("result validation: %w", err)
 	}
 
 	return processedData, metrics, nil
