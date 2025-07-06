@@ -116,6 +116,35 @@ func (ds *DebugSystem) nextOperationID() int64 {
 	return ds.operationID
 }
 
+func (ds *DebugSystem) TraceRegionProcessingFailure(operationID int64, x, y int, contrast float64, fallbackUsed string) {
+	if !ds.enabled {
+		return
+	}
+
+	ds.logger.Debug("region processing failure",
+		"operation_id", operationID,
+		"region_x", x,
+		"region_y", y,
+		"contrast", contrast,
+		"fallback_method", fallbackUsed,
+		"timestamp", time.Now().UnixMilli(),
+	)
+}
+
+func (ds *DebugSystem) TraceContrastAnalysis(operationID int64, regionCount, lowContrastCount int, avgContrast float64) {
+	if !ds.enabled {
+		return
+	}
+
+	ds.logger.Info("contrast analysis summary",
+		"operation_id", operationID,
+		"total_regions", regionCount,
+		"low_contrast_regions", lowContrastCount,
+		"average_contrast", avgContrast,
+		"low_contrast_percentage", float64(lowContrastCount)/float64(regionCount)*100,
+	)
+}
+
 func (ds *DebugSystem) TraceProcessingStart(method string, params *OtsuParameters, imageSize [2]int) int64 {
 	if !ds.enabled {
 		return 0

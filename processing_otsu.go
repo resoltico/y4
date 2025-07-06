@@ -1,10 +1,25 @@
 package main
 
 import (
+	"fmt"
 	"math"
 
 	"gocv.io/x/gocv"
 )
+
+func (pe *ProcessingEngine) validateRegionContrast(src gocv.Mat) (bool, float64, error) {
+	if err := validateMatForMetrics(src, "contrast validation"); err != nil {
+		return false, 0, err
+	}
+
+	minVal, maxVal, _, _ := gocv.MinMaxLoc(src)
+	contrast := maxVal - minVal
+
+	if contrast < 5.0 {
+		return false, contrast, fmt.Errorf("insufficient contrast: %.2f (minimum 5.0)", contrast)
+	}
+	return true, contrast, nil
+}
 
 func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBins int) [][]float64 {
 	if err := validateMatForMetrics(src, "2D histogram source"); err != nil {
@@ -17,6 +32,16 @@ func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBin
 
 	if err := validateMatDimensionsMatch(src, neighborhood, "2D histogram"); err != nil {
 		return make([][]float64, histBins)
+	}
+
+	// Validate contrast before processing
+	hasContrast, contrast, err := pe.validateRegionContrast(src)
+	if !hasContrast {
+		debugSystem := GetDebugSystem()
+		debugSystem.logger.Warn("skipping region due to insufficient contrast",
+			"contrast", contrast,
+			"error", err.Error())
+		return make([][]float64, histBins) // Return empty histogram
 	}
 
 	histogram := make([][]float64, histBins)
@@ -194,7 +219,7 @@ func (pe *ProcessingEngine) find2DOtsuThresholdInteger(histogram [][]float64) [2
 		return bestThreshold
 	}
 
-	// Test a range of thresholds and track variance
+	// Test thresholds and track variance quality
 	varianceData := make([]float64, 0, (histBins-2)*(histBins-2))
 
 	for t1 := 1; t1 < histBins-1; t1++ {
@@ -209,27 +234,30 @@ func (pe *ProcessingEngine) find2DOtsuThresholdInteger(histogram [][]float64) [2
 		}
 	}
 
-	// Calculate variance statistics
+	// Calculate variance statistics for quality assessment
 	avgVariance := 0.0
 	for _, v := range varianceData {
 		avgVariance += v
 	}
 	avgVariance /= float64(len(varianceData))
 
+	// Quality check - detect poor separation
+	varianceRatio := maxVariance / avgVariance
+
 	debugSystem.logger.Debug("Otsu threshold analysis",
 		"threshold_t1", bestThreshold[0],
 		"threshold_t2", bestThreshold[1],
 		"max_variance", maxVariance,
 		"avg_variance", avgVariance,
-		"variance_ratio", maxVariance/avgVariance,
+		"variance_ratio", varianceRatio,
 		"histogram_bins", histBins,
 		"total_count", totalCount)
 
-	// Warn if variance is too low (indicates poor separation)
-	if maxVariance < avgVariance*1.5 {
+	if varianceRatio < 1.5 {
 		debugSystem.logger.Warn("poor foreground/background separation detected",
 			"max_variance", maxVariance,
 			"avg_variance", avgVariance,
+			"variance_ratio", varianceRatio,
 			"threshold_t1", bestThreshold[0],
 			"threshold_t2", bestThreshold[1])
 	}
@@ -316,12 +344,16 @@ func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold
 		"foreground_ratio", foregroundRatio,
 		"bin_scale", binScale)
 
-	// Check for problematic results
+	// Enhanced diagnostic logging for problematic results
 	if foregroundPixels == 0 {
+		minVal, maxVal, _, _ := gocv.MinMaxLoc(src)
 		debugSystem.logger.Error("threshold produced all-background image",
 			"threshold_t1", threshold[0],
 			"threshold_t2", threshold[1],
-			"hist_bins", histBins)
+			"hist_bins", histBins,
+			"src_contrast", maxVal-minVal,
+			"src_min", minVal,
+			"src_max", maxVal)
 	} else if backgroundPixels == 0 {
 		debugSystem.logger.Error("threshold produced all-foreground image",
 			"threshold_t1", threshold[0],

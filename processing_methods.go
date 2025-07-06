@@ -7,6 +7,33 @@ import (
 	"gocv.io/x/gocv"
 )
 
+func (pe *ProcessingEngine) extractSafeRegion(src gocv.Mat, x, y, gridSize int) (gocv.Mat, bool) {
+	rows, cols := src.Rows(), src.Cols()
+	endY := min(y+gridSize, rows)
+	endX := min(x+gridSize, cols)
+
+	// Validate region dimensions
+	regionWidth := endX - x
+	regionHeight := endY - y
+
+	if err := validateImageDimensions(regionWidth, regionHeight, "region grid cell"); err != nil {
+		return gocv.NewMat(), false
+	}
+
+	// Ensure minimum meaningful size for processing
+	if regionWidth < 16 || regionHeight < 16 {
+		return gocv.NewMat(), false
+	}
+
+	roi := src.Region(image.Rect(x, y, endX, endY))
+	if err := validateMatForMetrics(roi, "region ROI"); err != nil {
+		roi.Close()
+		return gocv.NewMat(), false
+	}
+
+	return roi, true
+}
+
 func (pe *ProcessingEngine) processSingleScale(src gocv.Mat, params *OtsuParameters) gocv.Mat {
 	if err := validateMatForMetrics(src, "single scale processing"); err != nil {
 		return gocv.NewMat()
@@ -198,33 +225,44 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 
 	regionsProcessed := 0
 	regionErrors := 0
+	regionsSkipped := 0
+	lowContrastRegions := 0
+	totalContrast := 0.0
 
 	for y := 0; y < rows; y += gridSize {
 		for x := 0; x < cols; x += gridSize {
-			endY := min(y+gridSize, rows)
-			endX := min(x+gridSize, cols)
-
-			// Validate region dimensions
-			regionWidth := endX - x
-			regionHeight := endY - y
-			if err := validateImageDimensions(regionWidth, regionHeight, "region grid cell"); err != nil {
+			roi, isValid := pe.extractSafeRegion(src, x, y, gridSize)
+			if !isValid {
 				regionErrors++
 				continue
 			}
 
-			roi := src.Region(image.Rect(x, y, endX, endY))
+			// Check contrast before processing
+			hasContrast, contrast, err := pe.validateRegionContrast(roi)
+			totalContrast += contrast
 
-			if err := validateMatForMetrics(roi, "region ROI"); err != nil {
+			if !hasContrast {
+				lowContrastRegions++
+				debugSystem := GetDebugSystem()
+				debugSystem.logger.Debug("skipping low contrast region",
+					"x", x, "y", y,
+					"contrast", contrast,
+					"error", err.Error())
 				roi.Close()
-				regionErrors++
+				regionsSkipped++
 				continue
 			}
 
+			// Process region normally
 			regionParams := *params
 			regionParams.RegionAdaptiveThresholding = false
 			regionResult := pe.processSingleScale(roi, &regionParams)
 
 			if !regionResult.Empty() {
+				// Copy successful result
+				endY := min(y+regionResult.Rows(), rows)
+				endX := min(x+regionResult.Cols(), cols)
+
 				rowRange := result.RowRange(y, endY)
 				colRange := rowRange.ColRange(x, endX)
 				regionResult.CopyTo(&colRange)
@@ -241,11 +279,23 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 	}
 
 	debugSystem := GetDebugSystem()
+	totalRegions := regionsProcessed + regionErrors + regionsSkipped
+	avgContrast := 0.0
+	if totalRegions > 0 {
+		avgContrast = totalContrast / float64(totalRegions)
+	}
+
 	debugSystem.logger.Info("region adaptive processing complete",
 		"regions_processed", regionsProcessed,
+		"regions_skipped", regionsSkipped,
 		"region_errors", regionErrors,
+		"low_contrast_regions", lowContrastRegions,
+		"average_contrast", avgContrast,
 		"grid_size", gridSize,
 		"image_dimensions", []int{cols, rows})
+
+	// Log contrast analysis summary
+	debugSystem.TraceContrastAnalysis(0, totalRegions, lowContrastRegions, avgContrast)
 
 	if err := validateMatForMetrics(result, "region adaptive result"); err != nil {
 		result.Close()
