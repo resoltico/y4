@@ -13,7 +13,7 @@ func (pe *ProcessingEngine) validateRegionContrast(src gocv.Mat) (bool, float64,
 	}
 
 	minVal, maxVal, _, _ := gocv.MinMaxLoc(src)
-	contrast := maxVal - minVal
+	contrast := float64(maxVal - minVal)
 
 	if contrast < 5.0 {
 		return false, contrast, fmt.Errorf("insufficient contrast: %.2f (minimum 5.0)", contrast)
@@ -55,12 +55,12 @@ func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBin
 
 	// Debug: Check input data ranges
 	debugSystem := GetDebugSystem()
-	srcMin, srcMax, _, _ := gocv.MinMaxLoc(src)
-	neighMin, neighMax, _, _ := gocv.MinMaxLoc(neighborhood)
+	srcMinVal, srcMaxVal, _, _ := gocv.MinMaxLoc(src)
+	neighMinVal, neighMaxVal, _, _ := gocv.MinMaxLoc(neighborhood)
 
 	debugSystem.logger.Debug("histogram input analysis",
-		"src_min", srcMin, "src_max", srcMax,
-		"neigh_min", neighMin, "neigh_max", neighMax,
+		"src_min", float64(srcMinVal), "src_max", float64(srcMaxVal),
+		"neigh_min", float64(neighMinVal), "neigh_max", float64(neighMaxVal),
 		"hist_bins", histBins, "bin_scale", binScale)
 
 	totalPixels := 0
@@ -351,9 +351,9 @@ func (pe *ProcessingEngine) applyThreshold(src, neighborhood gocv.Mat, threshold
 			"threshold_t1", threshold[0],
 			"threshold_t2", threshold[1],
 			"hist_bins", histBins,
-			"src_contrast", maxVal-minVal,
-			"src_min", minVal,
-			"src_max", maxVal)
+			"src_contrast", float64(maxVal-minVal),
+			"src_min", float64(minVal),
+			"src_max", float64(maxVal))
 	} else if backgroundPixels == 0 {
 		debugSystem.logger.Error("threshold produced all-foreground image",
 			"threshold_t1", threshold[0],

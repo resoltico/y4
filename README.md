@@ -12,32 +12,45 @@ Advanced 2D Otsu thresholding application with multiple image quality metrics an
 go run .
 ```
 
+## Project Structure
+
+```
+otsu-obliterator/
+├── build/              # All compiled binaries
+├── logs/               # Debug and application logs  
+├── cmd/quality_check/  # Quality assurance tool
+├── *.go               # Application source files
+├── build.sh           # Build automation
+└── go.mod             # Dependencies
+```
+
 ## Debug Mode
 
 ### Enable Debug Features
 ```bash
-# Build with debug instrumentation
-go build -tags debug -o otsu-obliterator .
+# Build with debug instrumentation (outputs to build/)
+go build -tags debug -o build/otsu-obliterator-debug .
 
-# Run with debug logging
-./otsu-obliterator 2>&1 | grep -E "(DEBUG|ERROR|WARN)"
-
-# Set debug log level
+# Run with debug logging (logs to logs/)
+mkdir -p logs
 export LOG_LEVEL=debug
-go run -tags debug .
+./build/otsu-obliterator-debug 2>&1 | tee logs/debug.log
+
+# Filter debug output
+./build/otsu-obliterator-debug 2>&1 | grep -E "(DEBUG|ERROR|WARN)" | tee logs/filtered.log
 ```
 
-### Debug Output Filtering
+### Debug Output Management
 ```bash
-# View all debug output
-go run -tags debug .
+# View all debug output with log rotation
+go run -tags debug . 2>&1 | tee logs/debug-$(date +%Y%m%d-%H%M%S).log
 
-# Filter by category
-go run -tags debug . 2>&1 | grep "operation_id"     # Operations
-go run -tags debug . 2>&1 | grep "memory"           # Memory usage
-go run -tags debug . 2>&1 | grep "parameter"        # Parameter changes
-go run -tags debug . 2>&1 | grep "system snapshot"  # Resource monitoring
-go run -tags debug . 2>&1 | grep "duration_ms"      # Performance timing
+# Filter by category and save to logs/
+go run -tags debug . 2>&1 | grep "operation_id" | tee logs/operations.log
+go run -tags debug . 2>&1 | grep "memory" | tee logs/memory.log
+go run -tags debug . 2>&1 | grep "parameter" | tee logs/parameters.log
+go run -tags debug . 2>&1 | grep "system snapshot" | tee logs/monitoring.log
+go run -tags debug . 2>&1 | grep "duration_ms" | tee logs/performance.log
 ```
 
 ### Debug Features
@@ -45,22 +58,37 @@ go run -tags debug . 2>&1 | grep "duration_ms"      # Performance timing
 - **Operation Tracing**: Processing pipeline with IDs and timing
 - **Parameter History**: UI parameter change tracking
 - **Performance Metrics**: Memory allocation and timing data
+- **Log Management**: All logs written to `logs/` directory
 
 ## Quality Assurance
 
 ```bash
 go run cmd/quality_check/main.go check    # Full check with external tools
-go run cmd/quality_check/main.go fast     # Core checks only
+go run cmd/quality_check/main.go fast     # Core checks only  
 go run cmd/quality_check/main.go format   # Format validation only
 ```
+
+### Linting Tools
+- **go vet**: Built-in static analysis
+- **staticcheck**: Advanced bug detection and style
+- **govulncheck**: Security vulnerability scanner
+- **ineffassign**: Ineffectual assignment detection
+- **gofmt**: Code formatting validation
 
 ## Building
 
 ```bash
-./build.sh build         # Production build
+./build.sh build         # Production build (to build/)
 ./build.sh build debug   # Development build with race detection
-./build.sh build all     # Cross-platform builds
+./build.sh build all     # Cross-platform builds (all to build/)
+./build.sh clean         # Remove build/ directory
 ```
+
+### Build Output Organization
+- All binaries: `build/`
+- Debug binaries: `build/*-debug`
+- Cross-platform: `build/*-platform-arch`
+- No binaries in project root
 
 ## Features
 
@@ -130,6 +158,29 @@ DIBCO standards: F-measure, Pseudo F-measure (β=0.5), DRD with 5×5 weighting m
 - Single scale: O(n²)
 - Multi-scale: O(n² log n) 
 - Region adaptive: O(n²/g²)
+
+## File Organization
+
+### Build Outputs
+```bash
+build/
+├── otsu-obliterator           # Production binary
+├── otsu-obliterator-debug     # Debug binary
+├── otsu-obliterator.exe       # Windows build
+├── otsu-obliterator-macos-*   # macOS builds
+└── otsu-obliterator-linux-*   # Linux builds
+```
+
+### Debug Logs
+```bash
+logs/
+├── debug-YYYYMMDD-HHMMSS.log  # Timestamped debug logs
+├── operations.log             # Operation tracing
+├── memory.log                 # Memory monitoring
+├── parameters.log             # Parameter changes
+├── performance.log            # Timing data
+└── monitoring.log             # System snapshots
+```
 
 ## Validation
 

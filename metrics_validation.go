@@ -116,11 +116,11 @@ func validateBinaryMat(mat gocv.Mat, context string) error {
 
 	minVal, maxVal, _, _ := gocv.MinMaxLoc(gray)
 
-	if maxVal-minVal < 1e-6 {
+	if float64(maxVal-minVal) < 1e-6 {
 		return &MatValidationError{
 			Context: context,
 			Issue:   "matrix contains uniform values",
-			MatInfo: fmt.Sprintf("min=%.6f max=%.6f", minVal, maxVal),
+			MatInfo: fmt.Sprintf("min=%.6f max=%.6f", float64(minVal), float64(maxVal)),
 		}
 	}
 

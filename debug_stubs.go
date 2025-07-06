@@ -50,6 +50,9 @@ func (ds *DebugSystem) TraceThresholdCalculation(operationID int64, threshold [2
 func (ds *DebugSystem) TraceValidationError(err error, context string) {
 }
 
+func (ds *DebugSystem) TraceContrastAnalysis(operationID int64, regionCount, lowContrastCount int, avgContrast float64) {
+}
+
 func (ds *DebugSystem) DumpSystemState() {
 }
 

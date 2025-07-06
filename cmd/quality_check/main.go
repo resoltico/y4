@@ -128,6 +128,11 @@ func (qc *QualityChecker) ensureTools() {
 			binaryPath: qc.gopath + "/bin/govulncheck",
 			installCmd: []string{"go", "install", "golang.org/x/vuln/cmd/govulncheck@latest"},
 		},
+		{
+			name:       "ineffassign",
+			binaryPath: qc.gopath + "/bin/ineffassign",
+			installCmd: []string{"go", "install", "github.com/gordonklaus/ineffassign@latest"},
+		},
 	}
 
 	for _, tool := range tools {
@@ -217,19 +222,42 @@ func (qc *QualityChecker) runExternalTools() {
 	} else {
 		qc.warn("govulncheck not available")
 	}
+
+	ineffassignPath := qc.gopath + "/bin/ineffassign"
+	if qc.fileExists(ineffassignPath) {
+		output, err := qc.runCommand(ineffassignPath, "./...")
+		if err != nil {
+			qc.fail("Ineffectual assignments detected:")
+			if strings.TrimSpace(output) != "" {
+				fmt.Print(output)
+			}
+		} else {
+			qc.success("No ineffectual assignments found")
+		}
+	} else {
+		qc.warn("ineffassign not available")
+	}
 }
 
 func (qc *QualityChecker) checkBuild() {
 	fmt.Println("Verifying build...")
 
-	if err := qc.runCommandSilent("go", "build", "-v", "."); err != nil {
+	// Ensure build directory exists
+	if err := qc.runCommandSilent("mkdir", "-p", "build"); err != nil {
+		qc.fail("Failed to create build directory")
+		return
+	}
+
+	if err := qc.runCommandSilent("go", "build", "-o", "build/"+ProjectName, "."); err != nil {
 		qc.fail("Build failed")
 		return
 	}
 	qc.success("Build successful")
 
-	if qc.fileExists(ProjectName) {
-		os.Remove(ProjectName)
+	if qc.fileExists("build/" + ProjectName) {
+		qc.success("Binary created in build/ directory")
+	} else {
+		qc.fail("Binary not found in build/ directory")
 	}
 }
 

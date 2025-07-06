@@ -17,10 +17,8 @@ func (pe *ProcessingEngine) applyGaussianBlur(src gocv.Mat, sigma float64) gocv.
 	if kernelSize%2 == 0 {
 		kernelSize++
 	}
-	if err := gocv.GaussianBlur(src, &dst, image.Pt(kernelSize, kernelSize), sigma, sigma, gocv.BorderDefault); err != nil {
-		dst.Close()
-		return gocv.NewMat()
-	}
+
+	gocv.GaussianBlur(src, &dst, image.Pt(kernelSize, kernelSize), sigma, sigma, gocv.BorderDefault)
 
 	if err := validateMatForMetrics(dst, "Gaussian blur output"); err != nil {
 		dst.Close()
@@ -39,10 +37,7 @@ func (pe *ProcessingEngine) applyAdaptiveContrastEnhancement(src gocv.Mat) gocv.
 	defer clahe.Close()
 
 	dst := gocv.NewMat()
-	if err := clahe.Apply(src, &dst); err != nil {
-		dst.Close()
-		return gocv.NewMat()
-	}
+	clahe.Apply(src, &dst)
 
 	if err := validateMatForMetrics(dst, "CLAHE output"); err != nil {
 		dst.Close()
@@ -91,9 +86,7 @@ func (pe *ProcessingEngine) applyHomomorphicFiltering(src gocv.Mat) gocv.Mat {
 
 	filtered := gocv.NewMat()
 	defer filtered.Close()
-	if err := gocv.Filter2D(logMat, &filtered, -1, highPassKernel, image.Pt(-1, -1), 0, gocv.BorderDefault); err != nil {
-		return gocv.NewMat()
-	}
+	gocv.Filter2D(logMat, &filtered, -1, highPassKernel, image.Pt(-1, -1), 0, gocv.BorderDefault)
 
 	expMat := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
 	defer expMat.Close()
@@ -154,7 +147,7 @@ func (pe *ProcessingEngine) applyAnisotropicDiffusion(src gocv.Mat, iterations i
 				cW := math.Exp(-math.Pow(float64(gradW)/kappa, 2))
 
 				newVal := center + 0.25*(float32(cN)*gradN+float32(cS)*gradS+float32(cE)*gradE+float32(cW)*gradW)
-				next.SetFloatAt(y, x, float32(newVal))
+				next.SetFloatAt(y, x, newVal)
 			}
 		}
 
@@ -192,18 +185,13 @@ func (pe *ProcessingEngine) applyMorphologicalPostProcessing(src gocv.Mat, kerne
 
 	opened := gocv.NewMat()
 	defer opened.Close()
-	if err := gocv.MorphologyEx(src, &opened, gocv.MorphOpen, openingKernel); err != nil {
-		return gocv.NewMat()
-	}
+	gocv.MorphologyEx(src, &opened, gocv.MorphOpen, openingKernel)
 
 	closingKernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Pt(kernelSize+2, kernelSize+2))
 	defer closingKernel.Close()
 
 	result := gocv.NewMat()
-	if err := gocv.MorphologyEx(opened, &result, gocv.MorphClose, closingKernel); err != nil {
-		result.Close()
-		return gocv.NewMat()
-	}
+	gocv.MorphologyEx(opened, &result, gocv.MorphClose, closingKernel)
 
 	if err := validateMatForMetrics(result, "morphological post-processing output"); err != nil {
 		result.Close()
