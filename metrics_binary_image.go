@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"math"
 
@@ -93,9 +94,57 @@ func (m *BinaryImageMetrics) calculateConfusionMatrix(groundTruth, result gocv.M
 	}
 	defer resBinary.Close()
 
+	// Use calculatePixelStatistics for validation and debugging
+	totalPixels, gtForeground, gtBackground, _, err := calculatePixelStatistics(gtBinary)
+	if err != nil {
+		return err
+	}
+
+	resTotalPixels, resForeground, resBackground, _, err := calculatePixelStatistics(resBinary)
+	if err != nil {
+		return err
+	}
+
+	if totalPixels != resTotalPixels {
+		return fmt.Errorf("pixel count mismatch: %d vs %d", totalPixels, resTotalPixels)
+	}
+
+	// Validate reasonable foreground/background ratios
+	gtForegroundRatio := float64(gtForeground) / float64(totalPixels)
+	resForegroundRatio := float64(resForeground) / float64(totalPixels)
+
+	if gtForegroundRatio < 0.01 || gtForegroundRatio > 0.99 {
+		debugSystem := GetDebugSystem()
+		debugSystem.logger.Warn("ground truth has extreme foreground ratio",
+			"ratio", gtForegroundRatio,
+			"foreground", gtForeground,
+			"background", gtBackground,
+			"total", totalPixels)
+	}
+
+	if resForegroundRatio < 0.01 || resForegroundRatio > 0.99 {
+		debugSystem := GetDebugSystem()
+		debugSystem.logger.Warn("result has extreme foreground ratio",
+			"ratio", resForegroundRatio,
+			"foreground", resForeground,
+			"background", resBackground,
+			"total", resTotalPixels)
+	}
+
+	// Log pixel statistics for debugging
+	debugSystem := GetDebugSystem()
+	debugSystem.logger.Debug("confusion matrix pixel statistics",
+		"gt_foreground", gtForeground,
+		"gt_background", gtBackground,
+		"gt_ratio", gtForegroundRatio,
+		"res_foreground", resForeground,
+		"res_background", resBackground,
+		"res_ratio", resForegroundRatio,
+		"total_pixels", totalPixels)
+
 	rows := gtBinary.Rows()
 	cols := gtBinary.Cols()
-	m.TotalPixels = rows * cols
+	m.TotalPixels = totalPixels
 	m.TruePositives = 0
 	m.TrueNegatives = 0
 	m.FalsePositives = 0
@@ -122,15 +171,15 @@ func (m *BinaryImageMetrics) calculateConfusionMatrix(groundTruth, result gocv.M
 }
 
 func (m *BinaryImageMetrics) calculateDRD(groundTruth, result gocv.Mat) error {
-	gtBinary, err := ensureBinaryThresholded(groundTruth, "DRD ground truth")
+	gtBinary, err := createBinaryMask(groundTruth, 127)
 	if err != nil {
-		return err
+		return fmt.Errorf("DRD ground truth binary mask: %w", err)
 	}
 	defer gtBinary.Close()
 
-	resBinary, err := ensureBinaryThresholded(result, "DRD result")
+	resBinary, err := createBinaryMask(result, 127)
 	if err != nil {
-		return err
+		return fmt.Errorf("DRD result binary mask: %w", err)
 	}
 	defer resBinary.Close()
 
@@ -319,9 +368,9 @@ func (m *BinaryImageMetrics) extractContoursWithValidation(mat gocv.Mat, context
 		return [][]image.Point{}, err
 	}
 
-	binary, err := ensureBinaryThresholded(mat, context)
+	binary, err := createBinaryMask(mat, 127)
 	if err != nil {
-		return [][]image.Point{}, err
+		return [][]image.Point{}, fmt.Errorf("contour extraction binary mask: %w", err)
 	}
 	defer binary.Close()
 
@@ -393,15 +442,15 @@ func (m *BinaryImageMetrics) calculateDirectedHausdorffDistance(contour1, contou
 }
 
 func (m *BinaryImageMetrics) calculateBackgroundForegroundContrast(groundTruth, result gocv.Mat) error {
-	gtBinary, err := ensureBinaryThresholded(groundTruth, "BFC ground truth")
+	gtBinary, err := createBinaryMask(groundTruth, 127)
 	if err != nil {
-		return err
+		return fmt.Errorf("BFC ground truth binary mask: %w", err)
 	}
 	defer gtBinary.Close()
 
-	resBinary, err := ensureBinaryThresholded(result, "BFC result")
+	resBinary, err := createBinaryMask(result, 127)
 	if err != nil {
-		return err
+		return fmt.Errorf("BFC result binary mask: %w", err)
 	}
 	defer resBinary.Close()
 
@@ -493,7 +542,7 @@ func (m *BinaryImageMetrics) extractSkeleton(src gocv.Mat) gocv.Mat {
 		return gocv.NewMat()
 	}
 
-	binary, err := ensureBinaryThresholded(src, "skeleton extraction")
+	binary, err := createBinaryMask(src, 127)
 	if err != nil {
 		return gocv.NewMat()
 	}

@@ -8,6 +8,10 @@ import (
 )
 
 func (pe *ProcessingEngine) applyGaussianBlur(src gocv.Mat, sigma float64) gocv.Mat {
+	if err := validateMatForMetrics(src, "Gaussian blur input"); err != nil {
+		return gocv.NewMat()
+	}
+
 	dst := gocv.NewMat()
 	kernelSize := int(sigma*6) + 1
 	if kernelSize%2 == 0 {
@@ -17,10 +21,20 @@ func (pe *ProcessingEngine) applyGaussianBlur(src gocv.Mat, sigma float64) gocv.
 		dst.Close()
 		return gocv.NewMat()
 	}
+
+	if err := validateMatForMetrics(dst, "Gaussian blur output"); err != nil {
+		dst.Close()
+		return gocv.NewMat()
+	}
+
 	return dst
 }
 
 func (pe *ProcessingEngine) applyAdaptiveContrastEnhancement(src gocv.Mat) gocv.Mat {
+	if err := validateMatForMetrics(src, "CLAHE input"); err != nil {
+		return gocv.NewMat()
+	}
+
 	clahe := gocv.NewCLAHEWithParams(2.0, image.Pt(8, 8))
 	defer clahe.Close()
 
@@ -29,10 +43,20 @@ func (pe *ProcessingEngine) applyAdaptiveContrastEnhancement(src gocv.Mat) gocv.
 		dst.Close()
 		return gocv.NewMat()
 	}
+
+	if err := validateMatForMetrics(dst, "CLAHE output"); err != nil {
+		dst.Close()
+		return gocv.NewMat()
+	}
+
 	return dst
 }
 
 func (pe *ProcessingEngine) applyHomomorphicFiltering(src gocv.Mat) gocv.Mat {
+	if err := validateMatForMetrics(src, "homomorphic filtering input"); err != nil {
+		return gocv.NewMat()
+	}
+
 	rows, cols := src.Rows(), src.Cols()
 
 	floatMat := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
@@ -83,10 +107,24 @@ func (pe *ProcessingEngine) applyHomomorphicFiltering(src gocv.Mat) gocv.Mat {
 
 	result := gocv.NewMat()
 	expMat.ConvertTo(&result, gocv.MatTypeCV8U)
+
+	if err := validateMatForMetrics(result, "homomorphic filtering output"); err != nil {
+		result.Close()
+		return gocv.NewMat()
+	}
+
 	return result
 }
 
 func (pe *ProcessingEngine) applyAnisotropicDiffusion(src gocv.Mat, iterations int, kappa float64) gocv.Mat {
+	if err := validateMatForMetrics(src, "anisotropic diffusion input"); err != nil {
+		return gocv.NewMat()
+	}
+
+	if err := validateImageDimensions(src.Cols(), src.Rows(), "anisotropic diffusion"); err != nil {
+		return gocv.NewMat()
+	}
+
 	rows, cols := src.Rows(), src.Cols()
 
 	current := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
@@ -125,10 +163,30 @@ func (pe *ProcessingEngine) applyAnisotropicDiffusion(src gocv.Mat, iterations i
 
 	result := gocv.NewMat()
 	current.ConvertTo(&result, gocv.MatTypeCV8U)
+
+	if err := validateMatForMetrics(result, "anisotropic diffusion output"); err != nil {
+		result.Close()
+		return gocv.NewMat()
+	}
+
 	return result
 }
 
 func (pe *ProcessingEngine) applyMorphologicalPostProcessing(src gocv.Mat, kernelSize int) gocv.Mat {
+	if err := validateMatForMetrics(src, "morphological post-processing input"); err != nil {
+		return gocv.NewMat()
+	}
+
+	if err := validateBinaryMat(src, "morphological post-processing"); err != nil {
+		// Try to create binary mask if input isn't properly binary
+		binaryMask, maskErr := createBinaryMask(src, 127)
+		if maskErr != nil {
+			return gocv.NewMat()
+		}
+		defer binaryMask.Close()
+		src = binaryMask
+	}
+
 	openingKernel := gocv.GetStructuringElement(gocv.MorphEllipse, image.Pt(kernelSize, kernelSize))
 	defer openingKernel.Close()
 
@@ -143,6 +201,11 @@ func (pe *ProcessingEngine) applyMorphologicalPostProcessing(src gocv.Mat, kerne
 
 	result := gocv.NewMat()
 	if err := gocv.MorphologyEx(opened, &result, gocv.MorphClose, closingKernel); err != nil {
+		result.Close()
+		return gocv.NewMat()
+	}
+
+	if err := validateMatForMetrics(result, "morphological post-processing output"); err != nil {
 		result.Close()
 		return gocv.NewMat()
 	}

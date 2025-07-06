@@ -148,12 +148,20 @@ func ensureBinaryThresholded(src gocv.Mat, context string) (gocv.Mat, error) {
 	}
 	defer gray.Close()
 
+	if err := validateBinaryMat(gray, context+" grayscale"); err != nil {
+		return gocv.NewMat(), fmt.Errorf("binary validation failed: %w", err)
+	}
+
 	binary := gocv.NewMat()
 	gocv.Threshold(gray, &binary, 127, 255, gocv.ThresholdBinary)
 	return binary, nil
 }
 
 func calculatePixelStatistics(mat gocv.Mat) (int, int, int, int, error) {
+	if err := validateMatForMetrics(mat, "pixel statistics"); err != nil {
+		return 0, 0, 0, 0, err
+	}
+
 	binary, err := ensureBinaryThresholded(mat, "pixel statistics")
 	if err != nil {
 		return 0, 0, 0, 0, err
@@ -229,18 +237,6 @@ func validateAllMetrics(metrics *BinaryImageMetrics) error {
 	return nil
 }
 
-func validateMat(mat gocv.Mat, context string) error {
-	return validateMatForMetrics(mat, context)
-}
-
-func validateMatDimensions(mat1, mat2 gocv.Mat, context string) error {
-	return validateMatDimensionsMatch(mat1, mat2, context)
-}
-
-func validateImageMat(mat gocv.Mat, context string) error {
-	return validateMatForMetrics(mat, context)
-}
-
 func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
 	if params == nil {
 		return &ValidationError{
@@ -252,6 +248,10 @@ func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
 	}
 
 	width, height := imageSize[0], imageSize[1]
+
+	if err := validateImageDimensions(width, height, "parameter validation"); err != nil {
+		return err
+	}
 
 	if params.WindowSize < 3 || params.WindowSize > 21 {
 		return &ValidationError{
@@ -346,6 +346,37 @@ func validateOtsuParameters(params *OtsuParameters, imageSize [2]int) error {
 	return nil
 }
 
+func validateImageDimensions(width, height int, context string) error {
+	if width <= 0 || height <= 0 {
+		return &ValidationError{
+			Context: context,
+			Field:   "dimensions",
+			Value:   fmt.Sprintf("%dx%d", width, height),
+			Reason:  "width and height must be positive",
+		}
+	}
+
+	if width < 3 || height < 3 {
+		return &ValidationError{
+			Context: context,
+			Field:   "dimensions",
+			Value:   fmt.Sprintf("%dx%d", width, height),
+			Reason:  "minimum size 3x3 required for processing",
+		}
+	}
+
+	if width > 32768 || height > 32768 {
+		return &ValidationError{
+			Context: context,
+			Field:   "dimensions",
+			Value:   fmt.Sprintf("%dx%d", width, height),
+			Reason:  "exceeds maximum dimensions 32768x32768",
+		}
+	}
+
+	return nil
+}
+
 func validateProcessingInputs(originalImage *ImageData, params *OtsuParameters) error {
 	if originalImage == nil {
 		return fmt.Errorf("original image is nil")
@@ -375,37 +406,6 @@ func validateProcessingResult(result *ImageData, metrics *BinaryImageMetrics) er
 	if metrics != nil {
 		if err := validateAllMetrics(metrics); err != nil {
 			return fmt.Errorf("metrics validation: %w", err)
-		}
-	}
-
-	return nil
-}
-
-func validateImageDimensions(width, height int, context string) error {
-	if width <= 0 || height <= 0 {
-		return &ValidationError{
-			Context: context,
-			Field:   "dimensions",
-			Value:   fmt.Sprintf("%dx%d", width, height),
-			Reason:  "width and height must be positive",
-		}
-	}
-
-	if width < 3 || height < 3 {
-		return &ValidationError{
-			Context: context,
-			Field:   "dimensions",
-			Value:   fmt.Sprintf("%dx%d", width, height),
-			Reason:  "minimum size 3x3 required for processing",
-		}
-	}
-
-	if width > 32768 || height > 32768 {
-		return &ValidationError{
-			Context: context,
-			Field:   "dimensions",
-			Value:   fmt.Sprintf("%dx%d", width, height),
-			Reason:  "exceeds maximum dimensions 32768x32768",
 		}
 	}
 

@@ -7,6 +7,10 @@ import (
 )
 
 func (pe *ProcessingEngine) calculateAdaptiveWindowSize(src gocv.Mat) int {
+	if err := validateMatForMetrics(src, "adaptive window size calculation"); err != nil {
+		return 7 // safe default
+	}
+
 	rows, cols := src.Rows(), src.Cols()
 	minDimension := min(rows, cols)
 
@@ -22,6 +26,10 @@ func (pe *ProcessingEngine) calculateAdaptiveWindowSize(src gocv.Mat) int {
 }
 
 func (pe *ProcessingEngine) calculateHistogramBins(src gocv.Mat) int {
+	if err := validateMatForMetrics(src, "histogram bins calculation"); err != nil {
+		return 64 // safe default
+	}
+
 	rows, cols := src.Rows(), src.Cols()
 	pixelCount := rows * cols
 
@@ -37,6 +45,14 @@ func (pe *ProcessingEngine) calculateHistogramBins(src gocv.Mat) int {
 }
 
 func (pe *ProcessingEngine) calculateNeighborhood(src gocv.Mat, windowSize int, neighborhoodType string) gocv.Mat {
+	if err := validateMatForMetrics(src, "neighborhood calculation"); err != nil {
+		return gocv.NewMat()
+	}
+
+	if err := validateImageDimensions(src.Cols(), src.Rows(), "neighborhood calculation"); err != nil {
+		return gocv.NewMat()
+	}
+
 	switch neighborhoodType {
 	case "Circular":
 		return pe.calculateCircularNeighborhood(src, windowSize)
@@ -74,6 +90,11 @@ func (pe *ProcessingEngine) calculateRectangularNeighborhood(src gocv.Mat, windo
 		}
 	}
 
+	if err := validateMatForMetrics(result, "rectangular neighborhood result"); err != nil {
+		result.Close()
+		return gocv.NewMat()
+	}
+
 	return result
 }
 
@@ -105,6 +126,11 @@ func (pe *ProcessingEngine) calculateCircularNeighborhood(src gocv.Mat, windowSi
 				result.SetUCharAt(y, x, uint8(sum/count))
 			}
 		}
+	}
+
+	if err := validateMatForMetrics(result, "circular neighborhood result"); err != nil {
+		result.Close()
+		return gocv.NewMat()
 	}
 
 	return result
@@ -139,6 +165,11 @@ func (pe *ProcessingEngine) calculateDistanceWeightedNeighborhood(src gocv.Mat, 
 				result.SetUCharAt(y, x, uint8(weightedSum/totalWeight))
 			}
 		}
+	}
+
+	if err := validateMatForMetrics(result, "distance weighted neighborhood result"); err != nil {
+		result.Close()
+		return gocv.NewMat()
 	}
 
 	return result

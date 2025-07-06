@@ -34,14 +34,28 @@ func LoadImageFromReader(reader fyne.URIReadCloser) (*ImageData, error) {
 		return nil, fmt.Errorf("decode image with OpenCV: %w", err)
 	}
 
-	actualFormat := determineImageFormat(uriExtension, standardLibFormat)
+	// Validate loaded image dimensions and matrix
 	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	if err := validateImageDimensions(width, height, "image loading"); err != nil {
+		mat.Close()
+		return nil, fmt.Errorf("image dimension validation: %w", err)
+	}
+
+	if err := validateMatForMetrics(mat, "loaded image"); err != nil {
+		mat.Close()
+		return nil, fmt.Errorf("loaded image matrix validation: %w", err)
+	}
+
+	actualFormat := determineImageFormat(uriExtension, standardLibFormat)
 
 	imageData := &ImageData{
 		Image:    img,
 		Mat:      mat,
-		Width:    bounds.Dx(),
-		Height:   bounds.Dy(),
+		Width:    width,
+		Height:   height,
 		Channels: mat.Channels(),
 		Format:   actualFormat,
 	}
@@ -52,6 +66,15 @@ func LoadImageFromReader(reader fyne.URIReadCloser) (*ImageData, error) {
 func SaveImageToWriter(writer fyne.URIWriteCloser, imageData *ImageData) error {
 	if imageData == nil {
 		return fmt.Errorf("no image data to save")
+	}
+
+	// Validate image data before saving
+	if err := validateImageDimensions(imageData.Width, imageData.Height, "image saving"); err != nil {
+		return fmt.Errorf("save image validation: %w", err)
+	}
+
+	if err := validateMatForMetrics(imageData.Mat, "save image"); err != nil {
+		return fmt.Errorf("save image matrix validation: %w", err)
 	}
 
 	img := imageData.Image

@@ -80,7 +80,7 @@ func (pe *ProcessingEngine) ProcessImageWithTimeout(ctx context.Context, params 
 		return nil, nil, fmt.Errorf("no original image loaded")
 	}
 
-	if err := validateImageMat(pe.originalImage.Mat, "original image"); err != nil {
+	if err := validateMatForMetrics(pe.originalImage.Mat, "original image"); err != nil {
 		return nil, nil, fmt.Errorf("image validation failed: %w", err)
 	}
 
