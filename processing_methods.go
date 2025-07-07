@@ -12,7 +12,6 @@ func (pe *ProcessingEngine) extractSafeRegion(src gocv.Mat, x, y, gridSize int) 
 	endY := min(y+gridSize, rows)
 	endX := min(x+gridSize, cols)
 
-	// Validate region dimensions
 	regionWidth := endX - x
 	regionHeight := endY - y
 
@@ -20,7 +19,6 @@ func (pe *ProcessingEngine) extractSafeRegion(src gocv.Mat, x, y, gridSize int) 
 		return gocv.NewMat(), false
 	}
 
-	// Ensure minimum meaningful size for processing
 	if regionWidth < 16 || regionHeight < 16 {
 		return gocv.NewMat(), false
 	}
@@ -87,12 +85,11 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 		levels = 3
 	}
 
-	// Calculate maximum usable levels based on minimum size requirements
 	actualLevels := levels
 	for i := 1; i <= levels; i++ {
 		testRows := src.Rows() / (1 << i)
 		testCols := src.Cols() / (1 << i)
-		if testRows < 32 || testCols < 32 {
+		if testRows < 64 || testCols < 64 {
 			actualLevels = i - 1
 			break
 		}
@@ -100,24 +97,34 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 	levels = actualLevels
 
 	debugSystem := GetDebugSystem()
-	debugSystem.logger.Debug("multi-scale pyramid planning",
+	debugSystem.logger.Debug("multi-scale pyramid levels calculated",
 		"requested_levels", params.PyramidLevels,
 		"actual_levels", levels,
 		"source_size", fmt.Sprintf("%dx%d", src.Cols(), src.Rows()))
 
 	if levels < 1 {
-		debugSystem.logger.Warn("image too small for multi-scale processing, using single scale")
+		debugSystem.logger.Warn("insufficient levels for multi-scale processing, using single scale")
 		return pe.processSingleScale(src, params)
 	}
 
+	// Build pyramid using resize instead of unreliable PyrDown
 	pyramid := make([]gocv.Mat, levels+1)
 	pyramid[0] = src.Clone()
 
 	for i := 1; i <= levels; i++ {
+		prevLevel := pyramid[i-1]
+		targetRows := prevLevel.Rows() / 2
+		targetCols := prevLevel.Cols() / 2
+
 		pyramid[i] = gocv.NewMat()
-		if err := gocv.PyrDown(pyramid[i-1], &pyramid[i], image.Point{}, gocv.BorderDefault); err != nil {
+		err := gocv.Resize(prevLevel, &pyramid[i],
+			image.Point{X: targetCols, Y: targetRows},
+			0, 0, gocv.InterpolationArea)
+
+		if err != nil {
+			debugSystem.logger.Error("pyramid level resize failed", "level", i, "error", err)
 			pyramid[i].Close()
-			pyramid[i] = pyramid[i-1].Clone()
+			pyramid[i] = prevLevel.Clone()
 		}
 
 		if err := validateMatForMetrics(pyramid[i], "pyramid level"); err != nil {
@@ -131,11 +138,20 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 		}
 	}()
 
+	// Process each level with scale-appropriate parameters
 	results := make([]gocv.Mat, levels+1)
 	for i := 0; i <= levels; i++ {
 		scaleParams := *params
 		scaleParams.MultiScaleProcessing = false
 		scaleParams.WindowSize = max(3, params.WindowSize/(1<<i))
+		if scaleParams.WindowSize%2 == 0 {
+			scaleParams.WindowSize++
+		}
+
+		if scaleParams.HistogramBins > 0 {
+			scaleParams.HistogramBins = max(32, params.HistogramBins/(1<<i))
+		}
+
 		results[i] = pe.processSingleScale(pyramid[i], &scaleParams)
 	}
 
@@ -145,46 +161,49 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 		}
 	}()
 
+	// Combine results using weighted blending instead of OR
+	combined := results[0].Clone()
+	combinedFloat := gocv.NewMat()
+	defer combinedFloat.Close()
+	combined.ConvertTo(&combinedFloat, gocv.MatTypeCV32F)
+
 	for i := levels - 1; i >= 0; i-- {
+		if i == 0 {
+			break
+		}
+
 		upsampled := gocv.NewMat()
-		if err := gocv.PyrUp(results[i+1], &upsampled, image.Point{}, gocv.BorderDefault); err != nil {
-			upsampled.Close()
-			debugSystem.logger.Error("pyramid upsampling failed", "level", i, "error", err)
-			continue
-		}
+		targetSize := image.Point{X: results[i].Cols(), Y: results[i].Rows()}
 
-		if err := validateMatForMetrics(upsampled, "pyramid upsampled"); err != nil {
-			upsampled.Close()
-			debugSystem.logger.Error("upsampled matrix validation failed", "level", i, "error", err)
-			continue
-		}
-
-		// Resize upsampled to match current level dimensions
-		if upsampled.Rows() != results[i].Rows() || upsampled.Cols() != results[i].Cols() {
-			resized := gocv.NewMat()
-			gocv.Resize(upsampled, &resized, image.Point{X: results[i].Cols(), Y: results[i].Rows()}, 0, 0, gocv.InterpolationLinear)
-			upsampled.Close()
-			upsampled = resized
-		}
-
-		combined, err := performMatrixOperation(results[i], upsampled, "or")
+		err := gocv.Resize(results[i+1], &upsampled, targetSize, 0, 0, gocv.InterpolationLinear)
 		if err != nil {
+			debugSystem.logger.Error("upsampling failed", "level", i, "error", err)
 			upsampled.Close()
-			debugSystem.logger.Error("pyramid combination failed", "level", i, "error", err)
 			continue
 		}
 
-		results[i].Close()
+		upsampledFloat := gocv.NewMat()
+		upsampled.ConvertTo(&upsampledFloat, gocv.MatTypeCV32F)
+
+		// Weighted combination: fine details get higher weight
+		weight := 0.3 / float64(i+1)
+
+		gocv.AddWeighted(combinedFloat, 1.0-weight, upsampledFloat, weight, 0, &combinedFloat)
+
 		upsampled.Close()
-		results[i] = combined
+		upsampledFloat.Close()
 	}
 
-	if err := validateMatForMetrics(results[0], "multi-scale result"); err != nil {
-		results[0].Close()
+	// Convert back to binary
+	result := gocv.NewMat()
+	combinedFloat.ConvertTo(&result, gocv.MatTypeCV8U)
+
+	if err := validateMatForMetrics(result, "multi-scale result"); err != nil {
+		result.Close()
 		return gocv.NewMat()
 	}
 
-	return results[0]
+	return result
 }
 
 func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuParameters) gocv.Mat {
@@ -203,7 +222,6 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		gridSize = max(rows/8, cols/8)
 	}
 
-	// Ensure minimum grid size for meaningful processing
 	if gridSize < 32 {
 		debugSystem := GetDebugSystem()
 		debugSystem.logger.Warn("grid size too small, increasing",
@@ -211,7 +229,6 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		gridSize = 32
 	}
 
-	// Validate grid size makes sense for image dimensions
 	if gridSize > min(rows, cols)/2 {
 		debugSystem := GetDebugSystem()
 		debugSystem.logger.Warn("grid size too large for image dimensions",
@@ -237,7 +254,6 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 				continue
 			}
 
-			// Check contrast before processing
 			hasContrast, contrast, err := pe.validateRegionContrast(roi)
 			totalContrast += contrast
 
@@ -253,13 +269,11 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 				continue
 			}
 
-			// Process region normally
 			regionParams := *params
 			regionParams.RegionAdaptiveThresholding = false
 			regionResult := pe.processSingleScale(roi, &regionParams)
 
 			if !regionResult.Empty() {
-				// Copy successful result
 				endY := min(y+regionResult.Rows(), rows)
 				endX := min(x+regionResult.Cols(), cols)
 
@@ -294,7 +308,6 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		"grid_size", gridSize,
 		"image_dimensions", []int{cols, rows})
 
-	// Log contrast analysis summary
 	debugSystem.TraceContrastAnalysis(0, totalRegions, lowContrastRegions, avgContrast)
 
 	if err := validateMatForMetrics(result, "region adaptive result"); err != nil {
