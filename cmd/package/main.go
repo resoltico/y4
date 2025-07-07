@@ -173,7 +173,7 @@ func packageApp(config *PackageConfig) error {
 
 	// Create Info.plist
 	if err := createInfoPlist(config); err != nil {
-		return fmt.Errorf("Info.plist creation: %w", err)
+		return fmt.Errorf("info.plist creation: %w", err)
 	}
 
 	// Copy binary
