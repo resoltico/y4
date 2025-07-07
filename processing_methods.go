@@ -1,35 +1,8 @@
 package main
 
 import (
-	"image"
-
 	"gocv.io/x/gocv"
 )
-
-func (pe *ProcessingEngine) extractSafeRegion(src gocv.Mat, x, y, gridSize int) (gocv.Mat, bool) {
-	rows, cols := src.Rows(), src.Cols()
-	endY := min(y+gridSize, rows)
-	endX := min(x+gridSize, cols)
-
-	regionWidth := endX - x
-	regionHeight := endY - y
-
-	if err := validateImageDimensions(regionWidth, regionHeight, "region grid cell"); err != nil {
-		return gocv.NewMat(), false
-	}
-
-	if regionWidth < 16 || regionHeight < 16 {
-		return gocv.NewMat(), false
-	}
-
-	roi := src.Region(image.Rect(x, y, endX, endY))
-	if err := validateMatForMetrics(roi, "region ROI"); err != nil {
-		roi.Close()
-		return gocv.NewMat(), false
-	}
-
-	return roi, true
-}
 
 func (pe *ProcessingEngine) processSingleScale(src gocv.Mat, params *OtsuParameters) gocv.Mat {
 	if err := validateMatForMetrics(src, "single scale processing"); err != nil {
@@ -122,15 +95,25 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 	lowContrastRegions := 0
 	totalContrast := 0.0
 
+	// Process regions using efficient RowRange/ColRange operations
 	for y := 0; y < rows; y += gridSize {
+		endY := min(y+gridSize, rows)
+		srcRowRange := src.RowRange(y, endY)
+		dstRowRange := result.RowRange(y, endY)
+
 		for x := 0; x < cols; x += gridSize {
-			roi, isValid := pe.extractSafeRegion(src, x, y, gridSize)
-			if !isValid {
+			endX := min(x+gridSize, cols)
+
+			// Extract region using matrix slicing
+			srcRegion := srcRowRange.ColRange(x, endX)
+
+			if srcRegion.Rows() < 16 || srcRegion.Cols() < 16 {
+				srcRegion.Close()
 				regionErrors++
 				continue
 			}
 
-			hasContrast, contrast, err := pe.validateRegionContrast(roi)
+			hasContrast, contrast, err := pe.validateRegionContrast(srcRegion)
 			totalContrast += contrast
 
 			if !hasContrast {
@@ -140,32 +123,30 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 					"x", x, "y", y,
 					"contrast", contrast,
 					"error", err.Error())
-				roi.Close()
+				srcRegion.Close()
 				regionsSkipped++
 				continue
 			}
 
 			regionParams := *params
 			regionParams.RegionAdaptiveThresholding = false
-			regionResult := pe.processSingleScale(roi, &regionParams)
+			regionResult := pe.processSingleScale(srcRegion, &regionParams)
 
 			if !regionResult.Empty() {
-				endY := min(y+regionResult.Rows(), rows)
-				endX := min(x+regionResult.Cols(), cols)
-
-				rowRange := result.RowRange(y, endY)
-				colRange := rowRange.ColRange(x, endX)
-				regionResult.CopyTo(&colRange)
-				rowRange.Close()
-				colRange.Close()
+				dstRegion := dstRowRange.ColRange(x, endX)
+				regionResult.CopyTo(&dstRegion)
+				dstRegion.Close()
 				regionsProcessed++
 			} else {
 				regionErrors++
 			}
 
-			roi.Close()
+			srcRegion.Close()
 			regionResult.Close()
 		}
+
+		srcRowRange.Close()
+		dstRowRange.Close()
 	}
 
 	debugSystem := GetDebugSystem()
