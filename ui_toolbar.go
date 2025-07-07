@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"image/color"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -60,10 +60,10 @@ func (t *Toolbar) buildThemedLayout() {
 		t.resetButton,
 	)
 
-	// Create background rectangle with theme color
-	bgRect := canvas.NewRectangle(color.RGBA{R: 250, G: 249, B: 245, A: 255})
+	// Create background rectangle using theme header color
+	bgRect := canvas.NewRectangle(theme.Color(theme.ColorNameHeaderBackground))
 
-	// Use border layout to overlay buttons on colored background
+	// Use border layout to overlay buttons on themed background
 	t.container = container.NewBorder(
 		nil, nil, buttonsSection, nil, bgRect,
 	)
