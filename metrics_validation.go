@@ -137,7 +137,26 @@ func normalizeToGrayscale(src gocv.Mat, context string) (gocv.Mat, error) {
 	}
 
 	gray := gocv.NewMat()
-	gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
+
+	// Handle different channel counts including transparency
+	switch src.Channels() {
+	case 3:
+		gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
+	case 4:
+		// Convert BGRA to BGR first, then to grayscale
+		bgr := gocv.NewMat()
+		defer bgr.Close()
+		gocv.CvtColor(src, &bgr, gocv.ColorBGRAToBGR)
+		gocv.CvtColor(bgr, &gray, gocv.ColorBGRToGray)
+	default:
+		gray.Close()
+		return gocv.NewMat(), &MatValidationError{
+			Context: context,
+			Issue:   "unsupported channel count for grayscale conversion",
+			MatInfo: fmt.Sprintf("channels=%d", src.Channels()),
+		}
+	}
+
 	return gray, nil
 }
 
@@ -377,6 +396,39 @@ func validateImageDimensions(width, height int, context string) error {
 	return nil
 }
 
+func validateTransparencyHandling(mat gocv.Mat, context string) error {
+	if mat.Empty() {
+		return &MatValidationError{
+			Context: context,
+			Issue:   "transparency validation on empty matrix",
+			MatInfo: "empty",
+		}
+	}
+
+	channels := mat.Channels()
+
+	switch channels {
+	case 1, 3:
+		// Standard cases - no transparency
+		return nil
+	case 4:
+		// BGRA format with alpha channel
+		debugSystem := GetDebugSystem()
+		debugSystem.logger.Debug("transparency detected in matrix",
+			"context", context,
+			"channels", channels,
+			"dimensions", fmt.Sprintf("%dx%d", mat.Cols(), mat.Rows()),
+		)
+		return nil
+	default:
+		return &MatValidationError{
+			Context: context,
+			Issue:   "unsupported channel count",
+			MatInfo: fmt.Sprintf("channels=%d (supported: 1, 3, 4)", channels),
+		}
+	}
+}
+
 func validateProcessingInputs(originalImage *ImageData, params *OtsuParameters) error {
 	if originalImage == nil {
 		return fmt.Errorf("original image is nil")
@@ -384,6 +436,10 @@ func validateProcessingInputs(originalImage *ImageData, params *OtsuParameters) 
 
 	if err := validateMatForMetrics(originalImage.Mat, "processing input"); err != nil {
 		return fmt.Errorf("original image validation: %w", err)
+	}
+
+	if err := validateTransparencyHandling(originalImage.Mat, "processing input"); err != nil {
+		return fmt.Errorf("transparency validation: %w", err)
 	}
 
 	imageSize := [2]int{originalImage.Width, originalImage.Height}

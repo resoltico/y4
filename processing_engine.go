@@ -157,13 +157,28 @@ func (pe *ProcessingEngine) ProcessImage(params *OtsuParameters) (*ImageData, *B
 }
 
 func (pe *ProcessingEngine) convertToGrayscale(src gocv.Mat) gocv.Mat {
-	if src.Channels() == 1 {
+	switch src.Channels() {
+	case 1:
 		return src.Clone()
-	}
+	case 3:
+		gray := gocv.NewMat()
+		gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
+		return gray
+	case 4:
+		// Handle BGRA by first converting to BGR, then to grayscale
+		bgr := gocv.NewMat()
+		defer bgr.Close()
+		gocv.CvtColor(src, &bgr, gocv.ColorBGRAToBGR)
 
-	gray := gocv.NewMat()
-	gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
-	return gray
+		gray := gocv.NewMat()
+		gocv.CvtColor(bgr, &gray, gocv.ColorBGRToGray)
+		return gray
+	default:
+		// Fallback: try direct conversion
+		gray := gocv.NewMat()
+		gocv.CvtColor(src, &gray, gocv.ColorBGRToGray)
+		return gray
+	}
 }
 
 func (pe *ProcessingEngine) matToImage(mat gocv.Mat) image.Image {
