@@ -10,10 +10,9 @@ import (
 )
 
 type ImageViewer struct {
-	container      *fyne.Container
+	splitContainer *container.Split
 	originalImage  *canvas.Image
 	processedImage *canvas.Image
-	splitView      *container.Split
 }
 
 func NewImageViewer() *ImageViewer {
@@ -48,16 +47,12 @@ func (iv *ImageViewer) buildLayout() {
 		iv.processedImage,
 	)
 
-	iv.splitView = container.NewHSplit(originalContainer, processedContainer)
-	iv.splitView.SetOffset(0.5)
+	// Split container handles its own sizing - no wrapper needed
+	iv.splitContainer = container.NewHSplit(originalContainer, processedContainer)
+	iv.splitContainer.SetOffset(0.5)
 
-	// Use MaxLayout to ensure split fills available space
-	iv.container = container.NewMax(iv.splitView)
-
-	// Comprehensive debug logging
 	debugSystem := GetDebugSystem()
-	DebugLogUILayout(debugSystem.logger, "split_view", iv.splitView)
-	DebugLogUILayout(debugSystem.logger, "image_viewer_container", iv.container)
+	DebugLogUILayout(debugSystem.logger, "split_container", iv.splitContainer)
 	DebugLogImageSizing(debugSystem.logger, "original_image", iv.originalImage)
 	DebugLogImageSizing(debugSystem.logger, "processed_image", iv.processedImage)
 }
@@ -68,8 +63,7 @@ func (iv *ImageViewer) SetOriginalImage(img image.Image) {
 
 	debugSystem := GetDebugSystem()
 	DebugLogImageSizing(debugSystem.logger, "original_after_set", iv.originalImage)
-	DebugLogUILayout(debugSystem.logger, "container_after_original", iv.container)
-	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.container, "original_image_set")
+	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.splitContainer, "original_image_set")
 }
 
 func (iv *ImageViewer) SetProcessedImage(img image.Image) {
@@ -78,10 +72,10 @@ func (iv *ImageViewer) SetProcessedImage(img image.Image) {
 
 	debugSystem := GetDebugSystem()
 	DebugLogImageSizing(debugSystem.logger, "processed_after_set", iv.processedImage)
-	DebugLogUILayout(debugSystem.logger, "container_after_processed", iv.container)
-	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.container, "processed_image_set")
+	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.splitContainer, "processed_image_set")
 }
 
 func (iv *ImageViewer) GetContainer() *fyne.Container {
-	return iv.container
+	// Use border layout to ensure split container fills available space
+	return container.NewBorder(nil, nil, nil, nil, iv.splitContainer)
 }

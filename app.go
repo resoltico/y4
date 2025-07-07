@@ -2,11 +2,9 @@ package main
 
 import (
 	"context"
-	"image/color"
 	"log/slog"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 )
 
@@ -39,6 +37,9 @@ func NewApplication(fyneApp fyne.App, window fyne.Window, ctx context.Context, c
 		ConsoleOutput: true,
 	})
 
+	// Apply custom theme before creating UI components
+	fyneApp.Settings().SetTheme(NewOtsuTheme())
+
 	app.processing = NewProcessingEngine()
 	app.imageViewer = NewImageViewer()
 	app.parameters = NewParameterPanel(app)
@@ -61,19 +62,15 @@ func (a *Application) setupWindow() {
 	a.window.CenterOnScreen()
 	a.window.SetMaster()
 
-	// Create toolbar background
-	toolbarBg := canvas.NewRectangle(color.RGBA{R: 250, G: 249, B: 245, A: 255})
-	toolbarContainer := container.NewStack(toolbarBg, a.toolbar.GetContainer())
-
+	// Direct split container - no wrapper needed
 	content := container.NewVBox(
 		a.imageViewer.GetContainer(),
-		toolbarContainer,
+		a.toolbar.GetContainer(),
 		a.parameters.GetContainer(),
 	)
 
 	a.window.SetContent(content)
 
-	// Comprehensive debug logging
 	debugSystem := GetDebugSystem()
 	DebugLogWindowSizing(debugSystem.logger, a.window, "after_setup")
 	DebugLogContainerHierarchy(debugSystem.logger, "main_window", content, 0)

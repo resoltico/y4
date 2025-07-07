@@ -33,7 +33,7 @@ func NewToolbar(app *Application) *Toolbar {
 	t.createButtons()
 	t.createLabels()
 	t.fileSaveMenu = NewFileSaveMenu(app.window)
-	t.buildLayout()
+	t.buildThemedLayout()
 
 	return t
 }
@@ -57,7 +57,7 @@ func (t *Toolbar) createLabels() {
 	t.detailsLabel = widget.NewLabel("Load an image to begin processing")
 }
 
-func (t *Toolbar) buildLayout() {
+func (t *Toolbar) buildThemedLayout() {
 	buttonsSection := container.NewHBox(
 		t.loadButton,
 		t.saveButton,
@@ -70,6 +70,7 @@ func (t *Toolbar) buildLayout() {
 		t.detailsLabel,
 	)
 
+	// Native Fyne theming - respects dark/light modes automatically
 	t.container = container.NewBorder(
 		nil, nil, buttonsSection, metricsSection, nil,
 	)
