@@ -7,7 +7,7 @@ import (
 	"gocv.io/x/gocv"
 )
 
-// Real Gaussian pyramid using exact OpenCV 5x5 kernel and pixel rejection
+// Real Gaussian pyramid using 5x5 kernel and proper downsampling
 func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuParameters) gocv.Mat {
 	if err := validateMatForMetrics(src, "multi-scale processing"); err != nil {
 		return gocv.NewMat()
@@ -40,12 +40,12 @@ func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuP
 		return pe.processSingleScale(src, params)
 	}
 
-	// Build Gaussian pyramid using exact OpenCV method
+	// Build Gaussian pyramid using proper downsampling
 	pyramid := make([]gocv.Mat, levels+1)
 	pyramid[0] = src.Clone()
 
 	for i := 1; i <= levels; i++ {
-		pyramid[i] = pe.pyrDownExact(pyramid[i-1])
+		pyramid[i] = pe.pyrDownProper(pyramid[i-1])
 		if pyramid[i].Empty() {
 			debugSystem.logger.Error("pyramid construction failed", "level", i)
 			for j := 1; j < i; j++ {
@@ -70,11 +70,11 @@ func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuP
 		if scaleParams.WindowSize%2 == 0 {
 			scaleParams.WindowSize++
 		}
-		
+
 		if scaleParams.HistogramBins > 0 {
 			scaleParams.HistogramBins = max(32, params.HistogramBins/(1<<i))
 		}
-		
+
 		results[i] = pe.processSingleScale(pyramid[i], &scaleParams)
 	}
 
@@ -89,7 +89,7 @@ func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuP
 	defer reconstructed.Close()
 
 	for i := levels - 1; i >= 0; i-- {
-		upsampled := pe.pyrUpExact(reconstructed, results[i].Rows(), results[i].Cols())
+		upsampled := pe.pyrUpProper(reconstructed, results[i].Rows(), results[i].Cols())
 		if upsampled.Empty() {
 			debugSystem.logger.Error("upsampling failed", "level", i)
 			continue
@@ -98,7 +98,7 @@ func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuP
 		combined := gocv.NewMat()
 		weight := 0.7 // Favor finer scale details
 		gocv.AddWeighted(results[i], weight, upsampled, 1.0-weight, 0, &combined)
-		
+
 		reconstructed.Close()
 		upsampled.Close()
 		reconstructed = combined
@@ -111,44 +111,43 @@ func (pe *ProcessingEngine) processMultiScalePyramid(src gocv.Mat, params *OtsuP
 	return reconstructed.Clone()
 }
 
-// Create exact 5x5 Gaussian kernel matching OpenCV coefficients
+// Create 5x5 Gaussian kernel using manual construction
 func (pe *ProcessingEngine) createPyramidKernel() gocv.Mat {
-	// Exact OpenCV pyramid kernel: [1,4,6,4,1] pattern normalized by 1/256
-	kernelData := []float32{
-		1.0/256, 4.0/256, 6.0/256, 4.0/256, 1.0/256,
-		4.0/256, 16.0/256, 24.0/256, 16.0/256, 4.0/256,
-		6.0/256, 24.0/256, 36.0/256, 24.0/256, 6.0/256,
-		4.0/256, 16.0/256, 24.0/256, 16.0/256, 4.0/256,
-		1.0/256, 4.0/256, 6.0/256, 4.0/256, 1.0/256,
+	// OpenCV pyramid kernel coefficients
+	coeffs := []float32{
+		1.0 / 256, 4.0 / 256, 6.0 / 256, 4.0 / 256, 1.0 / 256,
+		4.0 / 256, 16.0 / 256, 24.0 / 256, 16.0 / 256, 4.0 / 256,
+		6.0 / 256, 24.0 / 256, 36.0 / 256, 24.0 / 256, 6.0 / 256,
+		4.0 / 256, 16.0 / 256, 24.0 / 256, 16.0 / 256, 4.0 / 256,
+		1.0 / 256, 4.0 / 256, 6.0 / 256, 4.0 / 256, 1.0 / 256,
 	}
-	
-	kernel, err := gocv.NewMatFromBytes(5, 5, gocv.MatTypeCV32F, (*[80]byte)(kernelData)[:])
-	if err != nil {
-		return gocv.NewMat()
+
+	// Create kernel manually to avoid unsafe.Pointer issues
+	kernel := gocv.NewMatWithSize(5, 5, gocv.MatTypeCV32F)
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			kernel.SetFloatAt(i, j, coeffs[i*5+j])
+		}
 	}
-	
 	return kernel
 }
 
-// Real pyrDown: exact 5x5 kernel + even pixel rejection
-func (pe *ProcessingEngine) pyrDownExact(src gocv.Mat) gocv.Mat {
+// Proper pyrDown: 5x5 Gaussian blur + efficient subsampling
+func (pe *ProcessingEngine) pyrDownProper(src gocv.Mat) gocv.Mat {
 	if err := validateMatForMetrics(src, "pyrDown input"); err != nil {
 		return gocv.NewMat()
 	}
 
-	// Step 1: Apply exact 5x5 Gaussian kernel
+	// Apply 5x5 Gaussian kernel
 	kernel := pe.createPyramidKernel()
 	defer kernel.Close()
-	
+
 	blurred := gocv.NewMat()
 	defer blurred.Close()
-	
-	err := gocv.Filter2D(src, &blurred, -1, kernel, image.Point{X: -1, Y: -1}, 0, gocv.BorderDefault)
-	if err != nil {
-		return gocv.NewMat()
-	}
 
-	// Step 2: Downsample by rejecting even rows and columns
+	gocv.Filter2D(src, &blurred, -1, kernel, image.Point{X: -1, Y: -1}, 0, gocv.BorderDefault)
+
+	// Efficient subsampling using matrix slicing
 	rows := blurred.Rows()
 	cols := blurred.Cols()
 	newRows := (rows + 1) / 2
@@ -156,32 +155,29 @@ func (pe *ProcessingEngine) pyrDownExact(src gocv.Mat) gocv.Mat {
 
 	result := gocv.NewMatWithSize(newRows, newCols, src.Type())
 
-	// Extract odd-indexed pixels using row/column operations
+	// Extract every 2nd row and column using bulk operations
 	for y := 0; y < newRows; y++ {
+		srcRow := blurred.RowRange(y*2, y*2+1)
+		dstRow := result.RowRange(y, y+1)
+
+		// Copy every 2nd column in the row
 		for x := 0; x < newCols; x++ {
-			srcY := y * 2
-			srcX := x * 2
-			
-			if srcY < rows && srcX < cols {
-				switch src.Type() {
-				case gocv.MatTypeCV8UC1:
-					val := blurred.GetUCharAt(srcY, srcX)
-					result.SetUCharAt(y, x, val)
-				case gocv.MatTypeCV8UC3:
-					for c := 0; c < 3; c++ {
-						val := blurred.GetUCharAt3(srcY, srcX, c)
-						result.SetUCharAt3(y, x, c, val)
-					}
-				}
-			}
+			srcCol := srcRow.ColRange(x*2, x*2+1)
+			dstCol := dstRow.ColRange(x, x+1)
+			srcCol.CopyTo(&dstCol)
+			srcCol.Close()
+			dstCol.Close()
 		}
+
+		srcRow.Close()
+		dstRow.Close()
 	}
 
 	return result
 }
 
-// Real pyrUp: insert zeros + blur with kernel×4
-func (pe *ProcessingEngine) pyrUpExact(src gocv.Mat, targetRows, targetCols int) gocv.Mat {
+// Proper pyrUp: insert zeros + blur with matrix operations
+func (pe *ProcessingEngine) pyrUpProper(src gocv.Mat, targetRows, targetCols int) gocv.Mat {
 	if err := validateMatForMetrics(src, "pyrUp input"); err != nil {
 		return gocv.NewMat()
 	}
@@ -189,57 +185,52 @@ func (pe *ProcessingEngine) pyrUpExact(src gocv.Mat, targetRows, targetCols int)
 	rows := src.Rows()
 	cols := src.Cols()
 
-	// Step 1: Insert zero rows and columns (upsample to double size)
+	// Upsample by inserting zeros using bulk operations
 	upsampled := gocv.NewMatWithSize(rows*2, cols*2, src.Type())
 	zeros := gocv.NewScalar(0, 0, 0, 0)
 	upsampled.SetTo(zeros)
 
-	// Copy original pixels to odd positions
+	// Copy source to even positions using RowRange/ColRange
 	for y := 0; y < rows; y++ {
+		srcRow := src.RowRange(y, y+1)
+		dstRow := upsampled.RowRange(y*2, y*2+1)
+
 		for x := 0; x < cols; x++ {
-			dstY := y * 2
-			dstX := x * 2
-			
-			switch src.Type() {
-			case gocv.MatTypeCV8UC1:
-				val := src.GetUCharAt(y, x)
-				upsampled.SetUCharAt(dstY, dstX, val)
-			case gocv.MatTypeCV8UC3:
-				for c := 0; c < 3; c++ {
-					val := src.GetUCharAt3(y, x, c)
-					upsampled.SetUCharAt3(dstY, dstX, c, val)
-				}
-			}
+			srcCol := srcRow.ColRange(x, x+1)
+			dstCol := dstRow.ColRange(x*2, x*2+1)
+			srcCol.CopyTo(&dstCol)
+			srcCol.Close()
+			dstCol.Close()
 		}
+
+		srcRow.Close()
+		dstRow.Close()
 	}
 
-	// Step 2: Apply kernel×4 (OpenCV multiplies coefficients by 4 for upsampling)
-	kernelData := []float32{
-		4.0/256, 16.0/256, 24.0/256, 16.0/256, 4.0/256,
-		16.0/256, 64.0/256, 96.0/256, 64.0/256, 16.0/256,
-		24.0/256, 96.0/256, 144.0/256, 96.0/256, 24.0/256,
-		16.0/256, 64.0/256, 96.0/256, 64.0/256, 16.0/256,
-		4.0/256, 16.0/256, 24.0/256, 16.0/256, 4.0/256,
+	// Apply 4x kernel for upsampling
+	coeffs4x := []float32{
+		4.0 / 256, 16.0 / 256, 24.0 / 256, 16.0 / 256, 4.0 / 256,
+		16.0 / 256, 64.0 / 256, 96.0 / 256, 64.0 / 256, 16.0 / 256,
+		24.0 / 256, 96.0 / 256, 144.0 / 256, 96.0 / 256, 24.0 / 256,
+		16.0 / 256, 64.0 / 256, 96.0 / 256, 64.0 / 256, 16.0 / 256,
+		4.0 / 256, 16.0 / 256, 24.0 / 256, 16.0 / 256, 4.0 / 256,
 	}
-	
-	kernel, err := gocv.NewMatFromBytes(5, 5, gocv.MatTypeCV32F, (*[80]byte)(kernelData)[:])
-	if err != nil {
-		upsampled.Close()
-		return gocv.NewMat()
+
+	kernel := gocv.NewMatWithSize(5, 5, gocv.MatTypeCV32F)
+	for i := 0; i < 5; i++ {
+		for j := 0; j < 5; j++ {
+			kernel.SetFloatAt(i, j, coeffs4x[i*5+j])
+		}
 	}
 	defer kernel.Close()
 
 	blurred := gocv.NewMat()
 	defer blurred.Close()
-	
-	err = gocv.Filter2D(upsampled, &blurred, -1, kernel, image.Point{X: -1, Y: -1}, 0, gocv.BorderDefault)
-	upsampled.Close()
-	
-	if err != nil {
-		return gocv.NewMat()
-	}
 
-	// Step 3: Resize to exact target dimensions if needed
+	gocv.Filter2D(upsampled, &blurred, -1, kernel, image.Point{X: -1, Y: -1}, 0, gocv.BorderDefault)
+	upsampled.Close()
+
+	// Resize to exact target dimensions if needed
 	if blurred.Rows() != targetRows || blurred.Cols() != targetCols {
 		result := gocv.NewMat()
 		gocv.Resize(blurred, &result, image.Point{X: targetCols, Y: targetRows}, 0, 0, gocv.InterpolationLinear)

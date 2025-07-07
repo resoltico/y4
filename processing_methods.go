@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image"
 
 	"gocv.io/x/gocv"
@@ -80,130 +79,7 @@ func (pe *ProcessingEngine) processMultiScale(src gocv.Mat, params *OtsuParamete
 		return gocv.NewMat()
 	}
 
-	levels := params.PyramidLevels
-	if levels <= 0 {
-		levels = 3
-	}
-
-	actualLevels := levels
-	for i := 1; i <= levels; i++ {
-		testRows := src.Rows() / (1 << i)
-		testCols := src.Cols() / (1 << i)
-		if testRows < 64 || testCols < 64 {
-			actualLevels = i - 1
-			break
-		}
-	}
-	levels = actualLevels
-
-	debugSystem := GetDebugSystem()
-	debugSystem.logger.Debug("multi-scale pyramid levels calculated",
-		"requested_levels", params.PyramidLevels,
-		"actual_levels", levels,
-		"source_size", fmt.Sprintf("%dx%d", src.Cols(), src.Rows()))
-
-	if levels < 1 {
-		debugSystem.logger.Warn("insufficient levels for multi-scale processing, using single scale")
-		return pe.processSingleScale(src, params)
-	}
-
-	// Build pyramid using resize instead of unreliable PyrDown
-	pyramid := make([]gocv.Mat, levels+1)
-	pyramid[0] = src.Clone()
-
-	for i := 1; i <= levels; i++ {
-		prevLevel := pyramid[i-1]
-		targetRows := prevLevel.Rows() / 2
-		targetCols := prevLevel.Cols() / 2
-
-		pyramid[i] = gocv.NewMat()
-		err := gocv.Resize(prevLevel, &pyramid[i],
-			image.Point{X: targetCols, Y: targetRows},
-			0, 0, gocv.InterpolationArea)
-
-		if err != nil {
-			debugSystem.logger.Error("pyramid level resize failed", "level", i, "error", err)
-			pyramid[i].Close()
-			pyramid[i] = prevLevel.Clone()
-		}
-
-		if err := validateMatForMetrics(pyramid[i], "pyramid level"); err != nil {
-			debugSystem.logger.Warn("pyramid level validation failed", "level", i, "error", err)
-		}
-	}
-
-	defer func() {
-		for i := 1; i <= levels; i++ {
-			pyramid[i].Close()
-		}
-	}()
-
-	// Process each level with scale-appropriate parameters
-	results := make([]gocv.Mat, levels+1)
-	for i := 0; i <= levels; i++ {
-		scaleParams := *params
-		scaleParams.MultiScaleProcessing = false
-		scaleParams.WindowSize = max(3, params.WindowSize/(1<<i))
-		if scaleParams.WindowSize%2 == 0 {
-			scaleParams.WindowSize++
-		}
-
-		if scaleParams.HistogramBins > 0 {
-			scaleParams.HistogramBins = max(32, params.HistogramBins/(1<<i))
-		}
-
-		results[i] = pe.processSingleScale(pyramid[i], &scaleParams)
-	}
-
-	defer func() {
-		for i := 1; i <= levels; i++ {
-			results[i].Close()
-		}
-	}()
-
-	// Combine results using weighted blending instead of OR
-	combined := results[0].Clone()
-	combinedFloat := gocv.NewMat()
-	defer combinedFloat.Close()
-	combined.ConvertTo(&combinedFloat, gocv.MatTypeCV32F)
-
-	for i := levels - 1; i >= 0; i-- {
-		if i == 0 {
-			break
-		}
-
-		upsampled := gocv.NewMat()
-		targetSize := image.Point{X: results[i].Cols(), Y: results[i].Rows()}
-
-		err := gocv.Resize(results[i+1], &upsampled, targetSize, 0, 0, gocv.InterpolationLinear)
-		if err != nil {
-			debugSystem.logger.Error("upsampling failed", "level", i, "error", err)
-			upsampled.Close()
-			continue
-		}
-
-		upsampledFloat := gocv.NewMat()
-		upsampled.ConvertTo(&upsampledFloat, gocv.MatTypeCV32F)
-
-		// Weighted combination: fine details get higher weight
-		weight := 0.3 / float64(i+1)
-
-		gocv.AddWeighted(combinedFloat, 1.0-weight, upsampledFloat, weight, 0, &combinedFloat)
-
-		upsampled.Close()
-		upsampledFloat.Close()
-	}
-
-	// Convert back to binary
-	result := gocv.NewMat()
-	combinedFloat.ConvertTo(&result, gocv.MatTypeCV8U)
-
-	if err := validateMatForMetrics(result, "multi-scale result"); err != nil {
-		result.Close()
-		return gocv.NewMat()
-	}
-
-	return result
+	return pe.processMultiScalePyramid(src, params)
 }
 
 func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuParameters) gocv.Mat {
