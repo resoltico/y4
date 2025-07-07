@@ -32,12 +32,12 @@ func (iv *ImageViewer) createImages() {
 	iv.originalImage = canvas.NewImageFromImage(nil)
 	iv.originalImage.FillMode = canvas.ImageFillContain
 	iv.originalImage.ScaleMode = canvas.ImageScaleSmooth
-	iv.originalImage.SetMinSize(fyne.NewSize(400, 300))
+	iv.originalImage.SetMinSize(fyne.NewSize(400, 400))
 
 	iv.processedImage = canvas.NewImageFromImage(nil)
 	iv.processedImage.FillMode = canvas.ImageFillContain
 	iv.processedImage.ScaleMode = canvas.ImageScaleSmooth
-	iv.processedImage.SetMinSize(fyne.NewSize(400, 300))
+	iv.processedImage.SetMinSize(fyne.NewSize(400, 400))
 }
 
 func (iv *ImageViewer) buildLayout() {

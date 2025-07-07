@@ -58,7 +58,7 @@ func NewApplication(fyneApp fyne.App, window fyne.Window, ctx context.Context, c
 }
 
 func (a *Application) setupWindow() {
-	a.window.Resize(fyne.NewSize(1400, 900))
+	a.window.Resize(fyne.NewSize(1360, 768))
 	a.window.CenterOnScreen()
 	a.window.SetMaster()
 
