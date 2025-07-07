@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"image"
 
 	"fyne.io/fyne/v2"
@@ -15,17 +14,12 @@ type ImageViewer struct {
 	originalImage  *canvas.Image
 	processedImage *canvas.Image
 	splitView      *container.Split
-	viewModeSelect *widget.Select
-	zoomSlider     *widget.Slider
-	zoomLabel      *widget.Label
 }
 
 func NewImageViewer() *ImageViewer {
 	iv := &ImageViewer{}
 	iv.createImages()
-	iv.createControls()
 	iv.buildLayout()
-	iv.setupHandlers()
 	return iv
 }
 
@@ -39,33 +33,6 @@ func (iv *ImageViewer) createImages() {
 	iv.processedImage.FillMode = canvas.ImageFillContain
 	iv.processedImage.ScaleMode = canvas.ImageScaleSmooth
 	iv.processedImage.SetMinSize(fyne.NewSize(400, 300))
-}
-
-func (iv *ImageViewer) createControls() {
-	iv.viewModeSelect = widget.NewSelect([]string{
-		"Side by Side",
-		"Original Only",
-		"Processed Only",
-		"Overlay Comparison",
-	}, nil)
-	iv.viewModeSelect.SetSelected("Side by Side")
-
-	iv.zoomSlider = widget.NewSlider(0.1, 3.0)
-	iv.zoomSlider.SetValue(1.0)
-	iv.zoomSlider.Step = 0.1
-
-	iv.zoomLabel = widget.NewLabel("Zoom: 100%")
-}
-
-func (iv *ImageViewer) setupHandlers() {
-	iv.viewModeSelect.OnChanged = func(mode string) {
-		iv.updateViewMode(mode)
-	}
-
-	iv.zoomSlider.OnChanged = func(value float64) {
-		iv.zoomLabel.SetText(fmt.Sprintf("Zoom: %.0f%%", value*100))
-		iv.updateZoom(value)
-	}
 }
 
 func (iv *ImageViewer) buildLayout() {
@@ -84,79 +51,37 @@ func (iv *ImageViewer) buildLayout() {
 	iv.splitView = container.NewHSplit(originalContainer, processedContainer)
 	iv.splitView.SetOffset(0.5)
 
-	controlsContainer := container.NewHBox(
-		widget.NewLabel("View:"),
-		iv.viewModeSelect,
-		widget.NewSeparator(),
-		iv.zoomLabel,
-		iv.zoomSlider,
-	)
+	// Use MaxLayout to ensure split fills available space
+	iv.container = container.NewMax(iv.splitView)
 
-	iv.container = container.NewBorder(
-		controlsContainer,
-		nil, nil, nil,
-		iv.splitView,
-	)
-}
-
-func (iv *ImageViewer) updateViewMode(mode string) {
-	switch mode {
-	case "Original Only":
-		iv.splitView.SetOffset(1.0)
-	case "Processed Only":
-		iv.splitView.SetOffset(0.0)
-	case "Overlay Comparison":
-		iv.splitView.SetOffset(0.5)
-		iv.createOverlayView()
-	default:
-		iv.splitView.SetOffset(0.5)
-	}
-}
-
-func (iv *ImageViewer) updateZoom(zoomLevel float64) {
-	newSize := fyne.NewSize(
-		float32(400.0*zoomLevel),
-		float32(300.0*zoomLevel),
-	)
-
-	iv.originalImage.SetMinSize(newSize)
-	iv.processedImage.SetMinSize(newSize)
-
-	iv.originalImage.Refresh()
-	iv.processedImage.Refresh()
-}
-
-func (iv *ImageViewer) createOverlayView() {
-	if iv.originalImage.Image == nil || iv.processedImage.Image == nil {
-		return
-	}
-
-	iv.originalImage.FillMode = canvas.ImageFillOriginal
-	iv.processedImage.FillMode = canvas.ImageFillOriginal
+	// Comprehensive debug logging
+	debugSystem := GetDebugSystem()
+	DebugLogUILayout(debugSystem.logger, "split_view", iv.splitView)
+	DebugLogUILayout(debugSystem.logger, "image_viewer_container", iv.container)
+	DebugLogImageSizing(debugSystem.logger, "original_image", iv.originalImage)
+	DebugLogImageSizing(debugSystem.logger, "processed_image", iv.processedImage)
 }
 
 func (iv *ImageViewer) SetOriginalImage(img image.Image) {
 	iv.originalImage.Image = img
 	iv.originalImage.Refresh()
 
-	if img != nil {
-		iv.zoomSlider.SetValue(1.0)
-		iv.updateZoom(1.0)
-	}
+	debugSystem := GetDebugSystem()
+	DebugLogImageSizing(debugSystem.logger, "original_after_set", iv.originalImage)
+	DebugLogUILayout(debugSystem.logger, "container_after_original", iv.container)
+	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.container, "original_image_set")
 }
 
 func (iv *ImageViewer) SetProcessedImage(img image.Image) {
 	iv.processedImage.Image = img
 	iv.processedImage.Refresh()
+
+	debugSystem := GetDebugSystem()
+	DebugLogImageSizing(debugSystem.logger, "processed_after_set", iv.processedImage)
+	DebugLogUILayout(debugSystem.logger, "container_after_processed", iv.container)
+	DebugLogLayoutRefresh(debugSystem.logger, "image_viewer", iv.container, "processed_image_set")
 }
 
 func (iv *ImageViewer) GetContainer() *fyne.Container {
 	return iv.container
-}
-
-func (iv *ImageViewer) ResetView() {
-	iv.viewModeSelect.SetSelected("Side by Side")
-	iv.zoomSlider.SetValue(1.0)
-	iv.updateViewMode("Side by Side")
-	iv.updateZoom(1.0)
 }

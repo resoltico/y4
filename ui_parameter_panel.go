@@ -40,6 +40,7 @@ type ParameterWidgets struct {
 	diffusionIterLabel     *widget.Label
 	diffusionKappaSlider   *widget.Slider
 	diffusionKappaLabel    *widget.Label
+	resetButton            *widget.Button
 
 	edgePreservationCheck   *widget.Check
 	noiseRobustnessCheck    *widget.Check
@@ -61,6 +62,7 @@ func NewParameterPanel(app *Application) *ParameterPanel {
 	pp.widgets = NewParameterWidgets()
 	pp.buildLayout()
 	pp.setupParameterListener()
+	pp.setupResetButton()
 
 	return pp
 }
@@ -122,6 +124,8 @@ func NewParameterWidgets() *ParameterWidgets {
 	w.diffusionKappaSlider.SetValue(30)
 	w.diffusionKappaLabel = widget.NewLabel("Diffusion Kappa: 30.0")
 
+	w.resetButton = widget.NewButton("Reset", nil)
+
 	w.edgePreservationCheck = widget.NewCheck("Edge Preservation", nil)
 	w.noiseRobustnessCheck = widget.NewCheck("Noise Robustness", nil)
 	w.gaussianPreprocessCheck = widget.NewCheck("Gaussian Preprocessing", nil)
@@ -141,52 +145,87 @@ func NewParameterWidgets() *ParameterWidgets {
 func (pp *ParameterPanel) buildLayout() {
 	basicSection := container.NewVBox(
 		widget.NewLabel("Basic Parameters"),
-		widget.NewSeparator(),
-		container.NewHBox(
-			container.NewVBox(pp.widgets.windowSizeLabel, pp.widgets.windowSizeSlider),
-			container.NewVBox(pp.widgets.histBinsLabel, pp.widgets.histBinsSlider),
-			container.NewVBox(pp.widgets.smoothingLabel, pp.widgets.smoothingSlider),
-		),
+		container.NewVBox(pp.widgets.windowSizeLabel, pp.widgets.windowSizeSlider),
+		container.NewVBox(pp.widgets.histBinsLabel, pp.widgets.histBinsSlider),
+		container.NewVBox(pp.widgets.smoothingLabel, pp.widgets.smoothingSlider),
 	)
 
 	methodSection := container.NewVBox(
 		widget.NewLabel("Processing Method"),
-		widget.NewSeparator(),
 		pp.widgets.processingMethodSelect,
-		container.NewHBox(
-			container.NewVBox(pp.widgets.pyramidLevelsLabel, pp.widgets.pyramidLevelsSlider),
-			container.NewVBox(pp.widgets.regionGridLabel, pp.widgets.regionGridSlider),
-		),
+		container.NewVBox(pp.widgets.pyramidLevelsLabel, pp.widgets.pyramidLevelsSlider),
+		container.NewVBox(pp.widgets.regionGridLabel, pp.widgets.regionGridSlider),
+		pp.widgets.resetButton,
 	)
 
 	algorithmSection := container.NewVBox(
 		widget.NewLabel("Algorithm Options"),
-		widget.NewSeparator(),
-		container.NewHBox(
-			pp.widgets.edgePreservationCheck,
-			pp.widgets.noiseRobustnessCheck,
-		),
-		container.NewHBox(
-			pp.widgets.gaussianPreprocessCheck,
-			pp.widgets.useLogCheck,
-		),
-		container.NewHBox(
-			pp.widgets.normalizeCheck,
-			pp.widgets.contrastCheck,
-		),
+		pp.widgets.edgePreservationCheck,
+		pp.widgets.noiseRobustnessCheck,
+		pp.widgets.gaussianPreprocessCheck,
+		pp.widgets.useLogCheck,
+		pp.widgets.normalizeCheck,
+		pp.widgets.contrastCheck,
 	)
 
-	allSections := container.NewVBox(
+	allSections := container.NewHBox(
 		basicSection,
 		methodSection,
 		algorithmSection,
 	)
 
-	scroll := container.NewScroll(allSections)
-	scroll.SetMinSize(fyne.NewSize(800, 400))
-	pp.container = container.NewBorder(nil, nil, nil, nil, scroll)
+	pp.container = allSections
+	pp.widgets.processingMethodSelect.SetSelected("Single Scale")
+}
+
+func (pp *ParameterPanel) setupResetButton() {
+	pp.widgets.resetButton.OnTapped = func() {
+		pp.resetToDefaults()
+	}
+}
+
+func (pp *ParameterPanel) resetToDefaults() {
+	pp.widgets.windowSizeSlider.SetValue(7)
+	pp.widgets.histBinsSlider.SetValue(0)
+	pp.widgets.smoothingSlider.SetValue(1.0)
+	pp.widgets.pyramidLevelsSlider.SetValue(3)
+	pp.widgets.regionGridSlider.SetValue(64)
+	pp.widgets.morphKernelSlider.SetValue(3)
+	pp.widgets.diffusionIterSlider.SetValue(5)
+	pp.widgets.diffusionKappaSlider.SetValue(30)
 
 	pp.widgets.processingMethodSelect.SetSelected("Single Scale")
+	pp.widgets.neighborhoodSelect.SetSelected("Rectangular")
+	pp.widgets.interpolationSelect.SetSelected("Bilinear")
+
+	pp.widgets.edgePreservationCheck.SetChecked(false)
+	pp.widgets.noiseRobustnessCheck.SetChecked(false)
+	pp.widgets.gaussianPreprocessCheck.SetChecked(true)
+	pp.widgets.useLogCheck.SetChecked(false)
+	pp.widgets.normalizeCheck.SetChecked(true)
+	pp.widgets.contrastCheck.SetChecked(false)
+	pp.widgets.adaptiveWindowCheck.SetChecked(false)
+	pp.widgets.morphPostProcessCheck.SetChecked(false)
+	pp.widgets.homomorphicCheck.SetChecked(false)
+	pp.widgets.anisotropicCheck.SetChecked(false)
+
+	pp.updateLabels()
+	pp.triggerParameterChange()
+}
+
+func (pp *ParameterPanel) updateLabels() {
+	pp.widgets.windowSizeLabel.SetText(fmt.Sprintf("Window Size: %.0f", pp.widgets.windowSizeSlider.Value))
+	if pp.widgets.histBinsSlider.Value == 0 {
+		pp.widgets.histBinsLabel.SetText("Histogram Bins: Auto")
+	} else {
+		pp.widgets.histBinsLabel.SetText(fmt.Sprintf("Histogram Bins: %.0f", pp.widgets.histBinsSlider.Value))
+	}
+	pp.widgets.smoothingLabel.SetText(fmt.Sprintf("Smoothing Strength: %.1f", pp.widgets.smoothingSlider.Value))
+	pp.widgets.pyramidLevelsLabel.SetText(fmt.Sprintf("Pyramid Levels: %.0f", pp.widgets.pyramidLevelsSlider.Value))
+	pp.widgets.regionGridLabel.SetText(fmt.Sprintf("Region Grid Size: %.0f", pp.widgets.regionGridSlider.Value))
+	pp.widgets.morphKernelLabel.SetText(fmt.Sprintf("Morphological Kernel: %.0f", pp.widgets.morphKernelSlider.Value))
+	pp.widgets.diffusionIterLabel.SetText(fmt.Sprintf("Diffusion Iterations: %.0f", pp.widgets.diffusionIterSlider.Value))
+	pp.widgets.diffusionKappaLabel.SetText(fmt.Sprintf("Diffusion Kappa: %.1f", pp.widgets.diffusionKappaSlider.Value))
 }
 
 func (pp *ParameterPanel) setupParameterListener() {
@@ -196,6 +235,20 @@ func (pp *ParameterPanel) setupParameterListener() {
 			intVal++
 		}
 		pp.widgets.windowSizeLabel.SetText(fmt.Sprintf("Window Size: %d", intVal))
+		pp.triggerParameterChange()
+	}
+
+	pp.widgets.histBinsSlider.OnChanged = func(value float64) {
+		if value == 0 {
+			pp.widgets.histBinsLabel.SetText("Histogram Bins: Auto")
+		} else {
+			pp.widgets.histBinsLabel.SetText(fmt.Sprintf("Histogram Bins: %.0f", value))
+		}
+		pp.triggerParameterChange()
+	}
+
+	pp.widgets.smoothingSlider.OnChanged = func(value float64) {
+		pp.widgets.smoothingLabel.SetText(fmt.Sprintf("Smoothing Strength: %.1f", value))
 		pp.triggerParameterChange()
 	}
 }

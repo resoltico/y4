@@ -39,10 +39,10 @@ func NewToolbar(app *Application) *Toolbar {
 }
 
 func (t *Toolbar) createButtons() {
-	t.loadButton = widget.NewButton("Load Image", t.handleLoadImage)
+	t.loadButton = widget.NewButton("Load", t.handleLoadImage)
 	t.loadButton.Importance = widget.HighImportance
 
-	t.saveButton = widget.NewButton("Save Result", t.handleSaveImage)
+	t.saveButton = widget.NewButton("Save", t.handleSaveImage)
 	t.saveButton.Importance = widget.HighImportance
 	t.saveButton.Disable()
 
@@ -58,8 +58,11 @@ func (t *Toolbar) createLabels() {
 }
 
 func (t *Toolbar) buildLayout() {
-	leftSection := container.NewHBox(t.loadButton, t.saveButton)
-	centerSection := container.NewHBox(t.processButton)
+	buttonsSection := container.NewHBox(
+		t.loadButton,
+		t.saveButton,
+		t.processButton,
+	)
 
 	metricsSection := container.NewVBox(
 		t.statusLabel,
@@ -68,7 +71,7 @@ func (t *Toolbar) buildLayout() {
 	)
 
 	t.container = container.NewBorder(
-		nil, nil, leftSection, metricsSection, centerSection,
+		nil, nil, buttonsSection, metricsSection, nil,
 	)
 }
 

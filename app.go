@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"image/color"
 	"log/slog"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/widget"
 )
 
 type Application struct {
@@ -60,19 +61,24 @@ func (a *Application) setupWindow() {
 	a.window.CenterOnScreen()
 	a.window.SetMaster()
 
-	mainContent := container.NewHSplit(
-		a.imageViewer.GetContainer(),
-		a.parameters.GetContainer(),
-	)
-	mainContent.SetOffset(0.7)
+	// Create toolbar background
+	toolbarBg := canvas.NewRectangle(color.RGBA{R: 250, G: 249, B: 245, A: 255})
+	toolbarContainer := container.NewStack(toolbarBg, a.toolbar.GetContainer())
 
 	content := container.NewVBox(
-		a.toolbar.GetContainer(),
-		widget.NewSeparator(),
-		mainContent,
+		a.imageViewer.GetContainer(),
+		toolbarContainer,
+		a.parameters.GetContainer(),
 	)
 
 	a.window.SetContent(content)
+
+	// Comprehensive debug logging
+	debugSystem := GetDebugSystem()
+	DebugLogWindowSizing(debugSystem.logger, a.window, "after_setup")
+	DebugLogContainerHierarchy(debugSystem.logger, "main_window", content, 0)
+	DebugLogUILayout(debugSystem.logger, "main_vbox", content)
+	DebugLogUILayout(debugSystem.logger, "image_viewer_in_window", a.imageViewer.GetContainer())
 
 	a.window.SetCloseIntercept(func() {
 		a.cleanup()
