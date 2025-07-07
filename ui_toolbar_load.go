@@ -20,7 +20,7 @@ func (t *Toolbar) handleLoadImage() {
 		debugSystem := GetDebugSystem()
 		opID := debugSystem.TraceProcessingStart("image_load", &OtsuParameters{}, [2]int{0, 0})
 
-		t.SetStatus("Loading image...")
+		t.app.parameters.SetStatus("Loading image...")
 		DebugTraceMemory("before_image_load")
 
 		imageData, loadErr := LoadImageFromReader(reader)
@@ -29,7 +29,7 @@ func (t *Toolbar) handleLoadImage() {
 		if loadErr != nil {
 			debugSystem.TraceProcessingEnd(opID, loadDuration, false, loadErr.Error())
 			dialog.ShowError(loadErr, t.app.window)
-			t.SetStatus("Load failed")
+			t.app.parameters.SetStatus("Load failed")
 			return
 		}
 
@@ -41,8 +41,8 @@ func (t *Toolbar) handleLoadImage() {
 			t.app.imageViewer.SetOriginalImage(imageData.Image)
 			t.app.processing.SetOriginalImage(imageData)
 			t.processButton.Enable()
-			t.SetStatus("Image loaded")
-			t.SetDetails(fmt.Sprintf("Image: %dx%d pixels, %d channels, %s format",
+			t.app.parameters.SetStatus("Image loaded")
+			t.app.parameters.SetDetails(fmt.Sprintf("Image: %dx%d pixels, %d channels, %s format",
 				imageData.Width, imageData.Height, imageData.Channels, imageData.Format))
 
 			DebugTraceParam("ImageLoaded", "none", fmt.Sprintf("%dx%d", imageData.Width, imageData.Height))

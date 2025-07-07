@@ -11,17 +11,17 @@ func (t *Toolbar) handleSaveImage() {
 		return
 	}
 
-	t.SetStatus("Preparing save...")
+	t.app.parameters.SetStatus("Preparing save...")
 
 	t.fileSaveMenu.ShowSaveDialog(processedData, func(writer fyne.URIWriteCloser, err error) {
 		if err != nil {
 			dialog.ShowError(err, t.app.window)
-			t.SetStatus("Save failed")
+			t.app.parameters.SetStatus("Save failed")
 			return
 		}
 
 		if writer != nil {
-			t.SetStatus("Image saved")
+			t.app.parameters.SetStatus("Image saved")
 			DebugTraceParam("ImageSaved", "none", writer.URI().String())
 		}
 	})

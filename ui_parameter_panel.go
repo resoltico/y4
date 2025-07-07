@@ -15,6 +15,11 @@ type ParameterPanel struct {
 	container *fyne.Container
 	widgets   *ParameterWidgets
 
+	// Status and metrics widgets
+	statusLabel  *widget.Label
+	metricsLabel *widget.Label
+	detailsLabel *widget.Label
+
 	lastProcessTime  time.Time
 	processingCtx    context.Context
 	processingCancel context.CancelFunc
@@ -40,7 +45,6 @@ type ParameterWidgets struct {
 	diffusionIterLabel     *widget.Label
 	diffusionKappaSlider   *widget.Slider
 	diffusionKappaLabel    *widget.Label
-	resetButton            *widget.Button
 
 	edgePreservationCheck   *widget.Check
 	noiseRobustnessCheck    *widget.Check
@@ -60,9 +64,9 @@ func NewParameterPanel(app *Application) *ParameterPanel {
 	}
 
 	pp.widgets = NewParameterWidgets()
+	pp.createStatusMetricsWidgets()
 	pp.buildLayout()
 	pp.setupParameterListener()
-	pp.setupResetButton()
 
 	return pp
 }
@@ -124,8 +128,6 @@ func NewParameterWidgets() *ParameterWidgets {
 	w.diffusionKappaSlider.SetValue(30)
 	w.diffusionKappaLabel = widget.NewLabel("Diffusion Kappa: 30.0")
 
-	w.resetButton = widget.NewButton("Reset", nil)
-
 	w.edgePreservationCheck = widget.NewCheck("Edge Preservation", nil)
 	w.noiseRobustnessCheck = widget.NewCheck("Noise Robustness", nil)
 	w.gaussianPreprocessCheck = widget.NewCheck("Gaussian Preprocessing", nil)
@@ -142,24 +144,29 @@ func NewParameterWidgets() *ParameterWidgets {
 	return w
 }
 
+func (pp *ParameterPanel) createStatusMetricsWidgets() {
+	pp.statusLabel = widget.NewLabel("Ready")
+	pp.metricsLabel = widget.NewLabel("No metrics available")
+	pp.detailsLabel = widget.NewLabel("Load an image to begin processing")
+}
+
 func (pp *ParameterPanel) buildLayout() {
 	basicSection := container.NewVBox(
-		widget.NewLabel("Basic Parameters"),
+		createSectionHeader("Basic Parameters"),
 		container.NewVBox(pp.widgets.windowSizeLabel, pp.widgets.windowSizeSlider),
 		container.NewVBox(pp.widgets.histBinsLabel, pp.widgets.histBinsSlider),
 		container.NewVBox(pp.widgets.smoothingLabel, pp.widgets.smoothingSlider),
 	)
 
 	methodSection := container.NewVBox(
-		widget.NewLabel("Processing Method"),
+		createSectionHeader("Processing Method"),
 		pp.widgets.processingMethodSelect,
 		container.NewVBox(pp.widgets.pyramidLevelsLabel, pp.widgets.pyramidLevelsSlider),
 		container.NewVBox(pp.widgets.regionGridLabel, pp.widgets.regionGridSlider),
-		pp.widgets.resetButton,
 	)
 
 	algorithmSection := container.NewVBox(
-		widget.NewLabel("Algorithm Options"),
+		createSectionHeader("Algorithm Options"),
 		pp.widgets.edgePreservationCheck,
 		pp.widgets.noiseRobustnessCheck,
 		pp.widgets.gaussianPreprocessCheck,
@@ -168,20 +175,22 @@ func (pp *ParameterPanel) buildLayout() {
 		pp.widgets.contrastCheck,
 	)
 
+	statusMetricsSection := container.NewVBox(
+		createSectionHeader("Status & Metrics"),
+		pp.statusLabel,
+		pp.metricsLabel,
+		pp.detailsLabel,
+	)
+
 	allSections := container.NewHBox(
 		basicSection,
 		methodSection,
 		algorithmSection,
+		statusMetricsSection,
 	)
 
 	pp.container = allSections
 	pp.widgets.processingMethodSelect.SetSelected("Single Scale")
-}
-
-func (pp *ParameterPanel) setupResetButton() {
-	pp.widgets.resetButton.OnTapped = func() {
-		pp.resetToDefaults()
-	}
 }
 
 func (pp *ParameterPanel) resetToDefaults() {
@@ -315,6 +324,55 @@ func (pp *ParameterPanel) GetCurrentParameters() *OtsuParameters {
 		RegionAdaptiveThresholding: pp.widgets.processingMethodSelect.Selected == "Region Adaptive",
 		RegionGridSize:             int(pp.widgets.regionGridSlider.Value),
 	}
+}
+
+func (pp *ParameterPanel) SetStatus(status string) {
+	pp.statusLabel.SetText("Status: " + status)
+}
+
+func (pp *ParameterPanel) SetDetails(details string) {
+	pp.detailsLabel.SetText(details)
+}
+
+func (pp *ParameterPanel) SetMetrics(metrics *BinaryImageMetrics) {
+	if metrics == nil {
+		pp.metricsLabel.SetText("No metrics available")
+		return
+	}
+
+	basicMetrics := fmt.Sprintf("F: %.3f | pF: %.3f | NRM: %.3f | DRD: %.3f",
+		metrics.FMeasure(),
+		metrics.PseudoFMeasure(),
+		metrics.NRM(),
+		metrics.DRD(),
+	)
+
+	pp.metricsLabel.SetText(basicMetrics)
+
+	debugSystem := GetDebugSystem()
+	debugSystem.logger.Info("metrics calculated",
+		"f_measure", metrics.FMeasure(),
+		"pseudo_f_measure", metrics.PseudoFMeasure(),
+		"nrm", metrics.NRM(),
+		"drd", metrics.DRD(),
+		"mpm", metrics.MPM(),
+		"bfc", metrics.BackgroundForegroundContrast(),
+		"skeleton", metrics.SkeletonSimilarity(),
+	)
+}
+
+func (pp *ParameterPanel) SetProcessingDetails(params *OtsuParameters, result *ImageData, metrics *BinaryImageMetrics) {
+	if params == nil || result == nil || metrics == nil {
+		return
+	}
+
+	allMetrics := fmt.Sprintf("MPM: %.3f | BFC: %.3f | Skeleton: %.3f",
+		metrics.MPM(),
+		metrics.BackgroundForegroundContrast(),
+		metrics.SkeletonSimilarity(),
+	)
+
+	pp.SetDetails(allMetrics)
 }
 
 func (pp *ParameterPanel) GetContainer() *fyne.Container {

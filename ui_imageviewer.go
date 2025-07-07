@@ -9,6 +9,12 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
+func createSectionHeader(text string) *widget.Label {
+	label := widget.NewLabel(text)
+	label.TextStyle = fyne.TextStyle{Bold: true}
+	return label
+}
+
 type ImageViewer struct {
 	splitContainer *container.Split
 	originalImage  *canvas.Image
@@ -36,13 +42,13 @@ func (iv *ImageViewer) createImages() {
 
 func (iv *ImageViewer) buildLayout() {
 	originalContainer := container.NewBorder(
-		widget.NewLabel("Original"),
+		createSectionHeader("Original"),
 		nil, nil, nil,
 		iv.originalImage,
 	)
 
 	processedContainer := container.NewBorder(
-		widget.NewLabel("Processed"),
+		createSectionHeader("Processed"),
 		nil, nil, nil,
 		iv.processedImage,
 	)

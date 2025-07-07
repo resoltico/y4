@@ -28,7 +28,7 @@ func (t *Toolbar) handleProcessImageWithParams(params *OtsuParameters) {
 	}
 
 	t.processingInProgress = true
-	t.SetStatus("Processing...")
+	t.app.parameters.SetStatus("Processing...")
 	t.processButton.SetText("Cancel")
 
 	t.currentProcessingCtx, t.cancelProcessing = context.WithCancel(context.Background())
@@ -57,7 +57,7 @@ func (t *Toolbar) handleProcessImageWithParams(params *OtsuParameters) {
 
 			fyne.Do(func() {
 				dialog.ShowError(err, t.app.window)
-				t.SetStatus("Parameter validation failed")
+				t.app.parameters.SetStatus("Parameter validation failed")
 			})
 			return
 		}
@@ -72,10 +72,10 @@ func (t *Toolbar) handleProcessImageWithParams(params *OtsuParameters) {
 
 			fyne.Do(func() {
 				if t.currentProcessingCtx.Err() == context.Canceled {
-					t.SetStatus("Processing cancelled")
+					t.app.parameters.SetStatus("Processing cancelled")
 				} else {
 					dialog.ShowError(err, t.app.window)
-					t.SetStatus("Processing failed")
+					t.app.parameters.SetStatus("Processing failed")
 				}
 			})
 			return
@@ -90,9 +90,9 @@ func (t *Toolbar) handleProcessImageWithParams(params *OtsuParameters) {
 
 		fyne.Do(func() {
 			t.app.imageViewer.SetProcessedImage(result.Image)
-			t.SetStatus("Processing complete")
-			t.SetMetrics(metrics)
-			t.SetProcessingDetails(params, result, metrics)
+			t.app.parameters.SetStatus("Processing complete")
+			t.app.parameters.SetMetrics(metrics)
+			t.app.parameters.SetProcessingDetails(params, result, metrics)
 			t.saveButton.Enable()
 
 			DebugTraceParam("ProcessingComplete", method, fmt.Sprintf("duration=%dms", processingDuration.Milliseconds()))
@@ -112,6 +112,6 @@ func (t *Toolbar) getProcessingMethodName(params *OtsuParameters) string {
 func (t *Toolbar) CancelCurrentProcessing() {
 	if t.processingInProgress && t.cancelProcessing != nil {
 		t.cancelProcessing()
-		t.SetStatus("Processing cancelled")
+		t.app.parameters.SetStatus("Processing cancelled")
 	}
 }

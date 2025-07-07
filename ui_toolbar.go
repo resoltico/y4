@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"image/color"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
@@ -15,9 +17,7 @@ type Toolbar struct {
 	loadButton    *widget.Button
 	saveButton    *widget.Button
 	processButton *widget.Button
-	statusLabel   *widget.Label
-	metricsLabel  *widget.Label
-	detailsLabel  *widget.Label
+	resetButton   *widget.Button
 	fileSaveMenu  *FileSaveMenu
 
 	processingInProgress bool
@@ -31,7 +31,6 @@ func NewToolbar(app *Application) *Toolbar {
 	}
 
 	t.createButtons()
-	t.createLabels()
 	t.fileSaveMenu = NewFileSaveMenu(app.window)
 	t.buildThemedLayout()
 
@@ -49,12 +48,8 @@ func (t *Toolbar) createButtons() {
 	t.processButton = widget.NewButton("Process", t.handleProcessImage)
 	t.processButton.Importance = widget.HighImportance
 	t.processButton.Disable()
-}
 
-func (t *Toolbar) createLabels() {
-	t.statusLabel = widget.NewLabel("Ready")
-	t.metricsLabel = widget.NewLabel("No metrics available")
-	t.detailsLabel = widget.NewLabel("Load an image to begin processing")
+	t.resetButton = widget.NewButton("Reset", t.handleReset)
 }
 
 func (t *Toolbar) buildThemedLayout() {
@@ -62,26 +57,20 @@ func (t *Toolbar) buildThemedLayout() {
 		t.loadButton,
 		t.saveButton,
 		t.processButton,
+		t.resetButton,
 	)
 
-	metricsSection := container.NewVBox(
-		t.statusLabel,
-		t.metricsLabel,
-		t.detailsLabel,
-	)
+	// Create background rectangle with theme color
+	bgRect := canvas.NewRectangle(color.RGBA{R: 250, G: 249, B: 245, A: 255})
 
-	// Native Fyne theming - respects dark/light modes automatically
+	// Use border layout to overlay buttons on colored background
 	t.container = container.NewBorder(
-		nil, nil, buttonsSection, metricsSection, nil,
+		nil, nil, buttonsSection, nil, bgRect,
 	)
 }
 
-func (t *Toolbar) SetStatus(status string) {
-	t.statusLabel.SetText("Status: " + status)
-}
-
-func (t *Toolbar) SetDetails(details string) {
-	t.detailsLabel.SetText(details)
+func (t *Toolbar) handleReset() {
+	t.app.parameters.resetToDefaults()
 }
 
 func (t *Toolbar) GetContainer() *fyne.Container {

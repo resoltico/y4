@@ -17,9 +17,8 @@ func (a *Application) showAbout() {
 	versionLabel := widget.NewLabel("Version " + metadata.Version)
 	versionLabel.Alignment = fyne.TextAlignCenter
 
-	descriptionLabel := widget.NewLabel("Advanced 2D Otsu thresholding application with multiple image quality metrics")
-	descriptionLabel.Alignment = fyne.TextAlignCenter
-	descriptionLabel.Wrapping = fyne.TextWrapWord
+	yearLabel := widget.NewLabel("© 2025")
+	yearLabel.Alignment = fyne.TextAlignCenter
 
 	authorLabel := widget.NewLabel("Author: Ervins Strauhmanis")
 	authorLabel.Alignment = fyne.TextAlignCenter
@@ -27,23 +26,12 @@ func (a *Application) showAbout() {
 	licenseLabel := widget.NewLabel("License: MIT")
 	licenseLabel.Alignment = fyne.TextAlignCenter
 
-	featuresLabel := widget.NewLabel("Features: Multi-scale processing, Region-adaptive thresholding, Advanced preprocessing, Comprehensive metrics")
-	featuresLabel.Alignment = fyne.TextAlignCenter
-	featuresLabel.Wrapping = fyne.TextWrapWord
-
-	techLabel := widget.NewLabel("Built with Go 1.24, Fyne v2.6.1, GoCV v0.41.0")
-	techLabel.Alignment = fyne.TextAlignCenter
-
 	content := container.NewVBox(
 		widget.NewSeparator(),
 		nameLabel,
 		versionLabel,
 		widget.NewSeparator(),
-		descriptionLabel,
-		widget.NewSeparator(),
-		featuresLabel,
-		widget.NewSeparator(),
-		techLabel,
+		yearLabel,
 		widget.NewSeparator(),
 		authorLabel,
 		licenseLabel,
