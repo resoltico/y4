@@ -8,15 +8,15 @@ import (
 
 func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBins int) [][]float64 {
 	if err := validateMatForMetrics(src, "2D histogram source"); err != nil {
-		return make([][]float64, histBins)
+		return pe.createEmptyHistogram(histBins)
 	}
 
 	if err := validateMatForMetrics(neighborhood, "2D histogram neighborhood"); err != nil {
-		return make([][]float64, histBins)
+		return pe.createEmptyHistogram(histBins)
 	}
 
 	if err := validateMatDimensionsMatch(src, neighborhood, "2D histogram"); err != nil {
-		return make([][]float64, histBins)
+		return pe.createEmptyHistogram(histBins)
 	}
 
 	// Validate contrast before processing
@@ -28,7 +28,7 @@ func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBin
 		debugSystem.logger.Warn("skipping region due to insufficient contrast",
 			"contrast", contrast,
 			"minimum", 5.0)
-		return make([][]float64, histBins) // Return empty histogram
+		return pe.createEmptyHistogram(histBins)
 	}
 
 	histogram := make([][]float64, histBins)
@@ -91,6 +91,15 @@ func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBin
 		"max_bin_value", maxBinValue,
 		"bins_ratio", float64(nonZeroBins)/float64(histBins*histBins))
 
+	return histogram
+}
+
+func (pe *ProcessingEngine) createEmptyHistogram(histBins int) [][]float64 {
+	// Create properly initialized empty histogram with zero values
+	histogram := make([][]float64, histBins)
+	for i := range histogram {
+		histogram[i] = make([]float64, histBins) // Initialize inner slices with zeros
+	}
 	return histogram
 }
 

@@ -421,6 +421,15 @@ func (pe *ProcessingEngine) processRegionWithMultilevelFallback(src gocv.Mat, x,
 		"contrast", contrast,
 		"entropy", entropy)
 
+	// CRITICAL FIX: Return sensible binary result for zero-contrast regions
+	if !hasContrast {
+		debugSystem.logger.Debug("creating uniform background for zero-contrast region")
+		result := gocv.NewMatWithSize(region.Rows(), region.Cols(), gocv.MatTypeCV8UC1)
+		backgroundScalar := gocv.NewScalar(0, 0, 0, 0) // All background (black)
+		result.SetTo(backgroundScalar)
+		return result
+	}
+
 	// Level 1: Standard 2D Otsu for high-quality regions
 	if hasContrast && contrast > 20.0 && entropy > 5.0 {
 		if pe.detectBimodalDistribution(region) {
