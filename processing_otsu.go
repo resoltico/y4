@@ -1,25 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"math"
 
 	"gocv.io/x/gocv"
 )
-
-func (pe *ProcessingEngine) validateRegionContrast(src gocv.Mat) (bool, float64, error) {
-	if err := validateMatForMetrics(src, "contrast validation"); err != nil {
-		return false, 0, err
-	}
-
-	minVal, maxVal, _, _ := gocv.MinMaxLoc(src)
-	contrast := float64(maxVal - minVal)
-
-	if contrast < 5.0 {
-		return false, contrast, fmt.Errorf("insufficient contrast: %.2f (minimum 5.0)", contrast)
-	}
-	return true, contrast, nil
-}
 
 func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBins int) [][]float64 {
 	if err := validateMatForMetrics(src, "2D histogram source"); err != nil {
@@ -35,12 +20,14 @@ func (pe *ProcessingEngine) build2DHistogram(src, neighborhood gocv.Mat, histBin
 	}
 
 	// Validate contrast before processing
-	hasContrast, contrast, err := pe.validateRegionContrast(src)
-	if !hasContrast {
+	minVal, maxVal, _, _ := gocv.MinMaxLoc(src)
+	contrast := float64(maxVal - minVal)
+
+	if contrast < 5.0 {
 		debugSystem := GetDebugSystem()
 		debugSystem.logger.Warn("skipping region due to insufficient contrast",
 			"contrast", contrast,
-			"error", err.Error())
+			"minimum", 5.0)
 		return make([][]float64, histBins) // Return empty histogram
 	}
 

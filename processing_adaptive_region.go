@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image"
 	"math"
 
 	"gocv.io/x/gocv"
@@ -48,17 +49,15 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 	lowContrastRegions := 0
 	totalContrast := 0.0
 
-	// Process regions using efficient RowRange/ColRange operations
+	// Process regions using efficient row/column operations
 	for y := 0; y < rows; y += gridSize {
 		endY := intMin(y+gridSize, rows)
-		srcRowRange := src.RowRange(y, endY)
-		dstRowRange := result.RowRange(y, endY)
 
 		for x := 0; x < cols; x += gridSize {
 			endX := intMin(x+gridSize, cols)
 
 			// Extract region using matrix slicing
-			srcRegion := srcRowRange.ColRange(x, endX)
+			srcRegion := src.Region(image.Rect(x, y, endX, endY))
 
 			if srcRegion.Rows() < 16 || srcRegion.Cols() < 16 {
 				srcRegion.Close()
@@ -66,7 +65,7 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 				continue
 			}
 
-			hasContrast, contrast, err := pe.validateRegionContrast(srcRegion)
+			hasContrast, contrast, err := pe.validateRegionContrastAdaptive(srcRegion)
 			totalContrast += contrast
 
 			if !hasContrast {
@@ -85,7 +84,7 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 			regionResult := pe.processSingleScaleAdaptive(srcRegion, &regionParams)
 
 			if !regionResult.Empty() {
-				dstRegion := dstRowRange.ColRange(x, endX)
+				dstRegion := result.Region(image.Rect(x, y, endX, endY))
 				regionResult.CopyTo(&dstRegion)
 				dstRegion.Close()
 				regionsProcessed++
@@ -96,9 +95,6 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 			srcRegion.Close()
 			regionResult.Close()
 		}
-
-		srcRowRange.Close()
-		dstRowRange.Close()
 	}
 
 	totalRegions := regionsProcessed + regionErrors + regionsSkipped
@@ -169,7 +165,7 @@ func (pe *ProcessingEngine) processSingleScaleAdaptive(src gocv.Mat, params *Ots
 	return result
 }
 
-func (pe *ProcessingEngine) validateRegionContrast(src gocv.Mat) (bool, float64, error) {
+func (pe *ProcessingEngine) validateRegionContrastAdaptive(src gocv.Mat) (bool, float64, error) {
 	if err := validateMatForMetrics(src, "contrast validation"); err != nil {
 		return false, 0, err
 	}
@@ -372,9 +368,9 @@ func (pe *ProcessingEngine) processOverlappingRegions(src gocv.Mat, params *Otsu
 
 			regionWeight := pe.createGaussianWeight(regionWidth, regionHeight)
 
-			// Extract target regions using RowRange/ColRange
-			targetRegion := result.RowRange(y, endY).ColRange(x, endX)
-			targetWeights := weights.RowRange(y, endY).ColRange(x, endX)
+			// Extract target regions using Region
+			targetRegion := result.Region(image.Rect(x, y, endX, endY))
+			targetWeights := weights.Region(image.Rect(x, y, endX, endY))
 
 			pe.blendRegionWeighted(regionResult, regionWeight, &targetRegion, &targetWeights)
 
@@ -404,7 +400,7 @@ func (pe *ProcessingEngine) processOverlappingRegions(src gocv.Mat, params *Otsu
 
 func (pe *ProcessingEngine) processRegionWithMultilevelFallback(src gocv.Mat, x, y, endX, endY int, params *OtsuParameters) gocv.Mat {
 	// Extract region using efficient matrix slicing
-	region := src.RowRange(y, endY).ColRange(x, endX)
+	region := src.Region(image.Rect(x, y, endX, endY))
 	defer region.Close()
 
 	debugSystem := GetDebugSystem()
@@ -573,7 +569,7 @@ func (pe *ProcessingEngine) expandRegionAdaptively(src gocv.Mat, x, y, endX, end
 	rows, cols := src.Rows(), src.Cols()
 
 	// Calculate expansion based on current region contrast
-	currentRegion := src.RowRange(y, endY).ColRange(x, endX)
+	currentRegion := src.Region(image.Rect(x, y, endX, endY))
 	defer currentRegion.Close()
 
 	_, contrast, _ := pe.analyzeRegionQuality(currentRegion)
@@ -614,7 +610,7 @@ func (pe *ProcessingEngine) expandRegionAdaptively(src gocv.Mat, x, y, endX, end
 		"expansion_factor", expansionFactor,
 		"contrast", contrast)
 
-	return src.RowRange(newY, newEndY).ColRange(newX, newEndX)
+	return src.Region(image.Rect(newX, newY, newEndX, newEndY))
 }
 
 func (pe *ProcessingEngine) createGaussianWeight(width, height int) gocv.Mat {
@@ -674,16 +670,21 @@ func (pe *ProcessingEngine) blendRegionWeighted(newRegion, regionWeight gocv.Mat
 	defer newWeights.Close()
 	gocv.Add(*targetWeights, regionWeight, &newWeights)
 
-	// Avoid division by zero
+	// Create threshold mask for avoiding division by zero
+	thresholdMat := gocv.NewMatWithSize(newWeights.Rows(), newWeights.Cols(), gocv.MatTypeCV32F)
+	defer thresholdMat.Close()
+	thresholdScalar := gocv.NewScalar(1e-6, 0, 0, 0)
+	thresholdMat.SetTo(thresholdScalar)
+
 	mask := gocv.NewMat()
 	defer mask.Close()
-	gocv.Compare(newWeights, gocv.NewScalar(1e-6, 0, 0, 0), &mask, gocv.CompareGT)
+	gocv.Compare(newWeights, thresholdMat, &mask, gocv.CompareGT)
 
 	// Apply mask to avoid zero division
 	nonZeroCount, _ := calculateSafeCountNonZero(mask, "blend weights check")
 	if nonZeroCount > 0 {
 		gocv.Divide(combined, newWeights, &combined)
-		combined.CopyTo(targetRegion, mask)
+		combined.CopyTo(targetRegion)
 		newWeights.CopyTo(targetWeights)
 	}
 }
@@ -697,10 +698,15 @@ func (pe *ProcessingEngine) normalizeByWeights(result *gocv.Mat, weights gocv.Ma
 		return
 	}
 
-	// Create mask for pixels with sufficient weight
+	// Create threshold matrix for sufficient weight
+	thresholdMat := gocv.NewMatWithSize(weights.Rows(), weights.Cols(), gocv.MatTypeCV32F)
+	defer thresholdMat.Close()
+	thresholdScalar := gocv.NewScalar(0.1, 0, 0, 0)
+	thresholdMat.SetTo(thresholdScalar)
+
 	mask := gocv.NewMat()
 	defer mask.Close()
-	gocv.Compare(weights, gocv.NewScalar(0.1, 0, 0, 0), &mask, gocv.CompareGT)
+	gocv.Compare(weights, thresholdMat, &mask, gocv.CompareGT)
 
 	// Convert result to 8-bit if needed
 	if result.Type() != gocv.MatTypeCV8UC1 {
