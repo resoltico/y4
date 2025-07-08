@@ -100,10 +100,7 @@ func (a *Application) cleanup() {
 
 func (a *Application) setupMenu() {
 	fileMenu := fyne.NewMenu("File")
-	helpMenu := fyne.NewMenu("Help",
-		fyne.NewMenuItem("About", a.showAbout),
-		fyne.NewMenuItem("Debug Info", a.showDebugInfo),
-	)
+	helpMenu := a.buildHelpMenu()
 
 	mainMenu := fyne.NewMainMenu(fileMenu, helpMenu)
 	a.window.SetMainMenu(mainMenu)
