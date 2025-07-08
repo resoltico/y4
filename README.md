@@ -185,7 +185,3 @@ logs/
 ## Validation
 
 Tested against DIBCO datasets, academic implementations, and standard benchmarks. Metrics match published results within acceptable tolerances.
-
-## License
-
-MIT - Ervins Strauhmanis

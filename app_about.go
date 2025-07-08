@@ -17,24 +17,15 @@ func (a *Application) showAbout() {
 	versionLabel := widget.NewLabel("Version " + metadata.Version)
 	versionLabel.Alignment = fyne.TextAlignCenter
 
-	yearLabel := widget.NewLabel("© 2025")
-	yearLabel.Alignment = fyne.TextAlignCenter
-
-	authorLabel := widget.NewLabel("Author: Ervins Strauhmanis")
-	authorLabel.Alignment = fyne.TextAlignCenter
-
-	licenseLabel := widget.NewLabel("License: MIT")
-	licenseLabel.Alignment = fyne.TextAlignCenter
+	yearauthorLabel := widget.NewLabel("© 2025 Ervins Strauhmanis")
+	yearauthorLabel.Alignment = fyne.TextAlignCenter
 
 	content := container.NewVBox(
 		widget.NewSeparator(),
 		nameLabel,
 		versionLabel,
 		widget.NewSeparator(),
-		yearLabel,
-		widget.NewSeparator(),
-		authorLabel,
-		licenseLabel,
+		yearauthorLabel,
 		widget.NewSeparator(),
 	)
 
