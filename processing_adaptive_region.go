@@ -43,7 +43,7 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 
 	// Initialize result matrix to background (BLACK = 0)
 	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
-	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // BLACK = background
+	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // WHITE is the proper background for art and text
 	result.SetTo(backgroundScalar)
 
 	regionsProcessed := 0
@@ -398,7 +398,7 @@ func (pe *ProcessingEngine) processOverlappingRegions(src gocv.Mat, params *Otsu
 	weights := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
 
 	// Initialize matrices to background
-	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // BLACK = background
+	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // WHITE is the proper background for art and text
 	zeroScalar := gocv.NewScalar(0, 0, 0, 0)         // Zero weights
 
 	result.SetTo(backgroundScalar)
