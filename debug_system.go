@@ -131,6 +131,63 @@ func (ds *DebugSystem) TraceRegionProcessingFailure(operationID int64, x, y int,
 	)
 }
 
+func (ds *DebugSystem) TraceRegionPixelStatistics(operationID int64, x, y, width, height int, foregroundPixels, backgroundPixels int) {
+	if !ds.enabled {
+		return
+	}
+
+	totalPixels := width * height
+	foregroundRatio := float64(foregroundPixels) / float64(totalPixels)
+
+	ds.logger.Debug("region pixel statistics",
+		"operation_id", operationID,
+		"region_x", x,
+		"region_y", y,
+		"region_width", width,
+		"region_height", height,
+		"total_pixels", totalPixels,
+		"foreground_pixels", foregroundPixels,
+		"background_pixels", backgroundPixels,
+		"foreground_ratio", foregroundRatio,
+	)
+}
+
+func (ds *DebugSystem) TraceUniformOutputDetection(operationID int64, uniformValue float64, totalRegions, processedRegions, skippedRegions int) {
+	if !ds.enabled {
+		return
+	}
+
+	ds.logger.Error("uniform output detected in region processing",
+		"operation_id", operationID,
+		"uniform_value", uniformValue,
+		"total_regions", totalRegions,
+		"processed_regions", processedRegions,
+		"skipped_regions", skippedRegions,
+		"processing_ratio", float64(processedRegions)/float64(totalRegions),
+	)
+}
+
+func (ds *DebugSystem) TraceFinalImageStatistics(operationID int64, minVal, maxVal float64, foregroundPixels, totalPixels int) {
+	if !ds.enabled {
+		return
+	}
+
+	backgroundPixels := totalPixels - foregroundPixels
+	foregroundRatio := float64(foregroundPixels) / float64(totalPixels)
+
+	ds.logger.Info("final image statistics",
+		"operation_id", operationID,
+		"min_value", minVal,
+		"max_value", maxVal,
+		"value_range", maxVal-minVal,
+		"foreground_pixels", foregroundPixels,
+		"background_pixels", backgroundPixels,
+		"total_pixels", totalPixels,
+		"foreground_ratio", foregroundRatio,
+		"is_uniform", minVal == maxVal,
+	)
+}
+
 func (ds *DebugSystem) TraceContrastAnalysis(operationID int64, regionCount, lowContrastCount int, avgContrast float64) {
 	if !ds.enabled {
 		return

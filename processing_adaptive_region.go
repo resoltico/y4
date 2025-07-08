@@ -41,9 +41,9 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		return pe.processSingleScaleAdaptive(src, params)
 	}
 
-	// CRITICAL FIX: Initialize result matrix to background (0)
+	// Initialize result matrix to background (BLACK = 0)
 	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
-	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // WHITE = correct background for binary images
+	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // BLACK = background
 	result.SetTo(backgroundScalar)
 
 	regionsProcessed := 0
@@ -51,6 +51,10 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 	regionsSkipped := 0
 	lowContrastRegions := 0
 	totalContrast := 0.0
+
+	// Debug tracking
+	totalForegroundPixels := 0
+	totalBackgroundPixels := 0
 
 	// Process regions using efficient row/column operations
 	for y := 0; y < rows; y += gridSize {
@@ -68,32 +72,63 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 				continue
 			}
 
-			hasContrast, contrast, err := pe.validateRegionContrastAdaptive(srcRegion)
+			hasContrast, contrast, _ := pe.validateRegionContrastAdaptive(srcRegion)
 			totalContrast += contrast
 
 			if !hasContrast {
 				lowContrastRegions++
-				debugSystem.logger.Debug("skipping low contrast region",
+				debugSystem.logger.Debug("region quality analysis",
 					"x", x, "y", y,
+					"width", endX-x, "height", endY-y,
+					"has_contrast", false,
 					"contrast", contrast,
-					"error", err.Error())
+					"entropy", 0)
+
 				srcRegion.Close()
 				regionsSkipped++
-				// Region remains initialized background (0) - no processing needed
+				// Region remains initialized background (BLACK) - consistent
+				regionPixels := (endX - x) * (endY - y)
+				totalBackgroundPixels += regionPixels
 				continue
 			}
+
+			debugSystem.logger.Debug("region quality analysis",
+				"x", x, "y", y,
+				"width", endX-x, "height", endY-y,
+				"has_contrast", true,
+				"contrast", contrast,
+				"entropy", 0)
 
 			regionParams := *params
 			regionParams.RegionAdaptiveThresholding = false
 			regionResult := pe.processSingleScaleAdaptive(srcRegion, &regionParams)
 
 			if !regionResult.Empty() {
+				// Count pixels in this region result
+				regionForeground, regionErr := calculateSafeCountNonZero(regionResult, "region result")
+				if regionErr == nil {
+					regionPixels := (endX - x) * (endY - y)
+					regionBackground := regionPixels - regionForeground
+					totalForegroundPixels += regionForeground
+					totalBackgroundPixels += regionBackground
+
+					debugSystem.logger.Debug("region processing result",
+						"x", x, "y", y,
+						"region_pixels", regionPixels,
+						"foreground_pixels", regionForeground,
+						"background_pixels", regionBackground,
+						"foreground_ratio", float64(regionForeground)/float64(regionPixels))
+				}
+
 				dstRegion := result.Region(image.Rect(x, y, endX, endY))
 				regionResult.CopyTo(&dstRegion)
 				dstRegion.Close()
 				regionsProcessed++
 			} else {
 				regionErrors++
+				// Failed region remains background
+				regionPixels := (endX - x) * (endY - y)
+				totalBackgroundPixels += regionPixels
 			}
 
 			srcRegion.Close()
@@ -107,6 +142,13 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		avgContrast = totalContrast / float64(totalRegions)
 	}
 
+	// Validate final result
+	minVal, maxVal, _, _ := gocv.MinMaxLoc(result)
+	finalForeground, _ := calculateSafeCountNonZero(result, "final result")
+	totalPixels := rows * cols
+	finalBackground := totalPixels - finalForeground
+	finalForegroundRatio := float64(finalForeground) / float64(totalPixels)
+
 	debugSystem.logger.Info("region adaptive processing complete",
 		"regions_processed", regionsProcessed,
 		"regions_skipped", regionsSkipped,
@@ -114,9 +156,31 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		"low_contrast_regions", lowContrastRegions,
 		"average_contrast", avgContrast,
 		"grid_size", gridSize,
-		"image_dimensions", []int{cols, rows})
+		"image_dimensions", []int{cols, rows},
+		"result_min_value", float64(minVal),
+		"result_max_value", float64(maxVal),
+		"final_foreground_pixels", finalForeground,
+		"final_background_pixels", finalBackground,
+		"final_foreground_ratio", finalForegroundRatio,
+		"total_pixels", totalPixels)
 
 	debugSystem.TraceContrastAnalysis(0, totalRegions, lowContrastRegions, avgContrast)
+
+	// Check for uniform output
+	if minVal == maxVal {
+		debugSystem.logger.Error("uniform output detected",
+			"uniform_value", float64(minVal),
+			"total_regions", totalRegions,
+			"processed_regions", regionsProcessed,
+			"skipped_regions", regionsSkipped)
+
+		// Apply global fallback
+		result.Close()
+		globalResult := gocv.NewMat()
+		gocv.Threshold(src, &globalResult, 0, 255, gocv.ThresholdBinary+gocv.ThresholdOtsu)
+		debugSystem.logger.Info("applied global Otsu fallback")
+		return globalResult
+	}
 
 	if err := validateMatForMetrics(result, "region adaptive result"); err != nil {
 		result.Close()
@@ -282,7 +346,7 @@ func (pe *ProcessingEngine) shouldUseOverlappingRegions(src gocv.Mat, params *Ot
 	entropy := pe.calculateImageEntropy(src)
 	contrast := calculateRegionContrast(src)
 
-	complexityThreshold := 6.0
+	complexityThreshold := 10.0
 	contrastThreshold := 25.0
 
 	isComplex := entropy > complexityThreshold && contrast > contrastThreshold
@@ -333,8 +397,8 @@ func (pe *ProcessingEngine) processOverlappingRegions(src gocv.Mat, params *Otsu
 	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
 	weights := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
 
-	// CRITICAL FIX: Initialize matrices properly
-	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // WHITE = correct background for binary images
+	// Initialize matrices to background
+	backgroundScalar := gocv.NewScalar(255, 0, 0, 0) // BLACK = background
 	zeroScalar := gocv.NewScalar(0, 0, 0, 0)         // Zero weights
 
 	result.SetTo(backgroundScalar)
@@ -421,13 +485,10 @@ func (pe *ProcessingEngine) processRegionWithMultilevelFallback(src gocv.Mat, x,
 		"contrast", contrast,
 		"entropy", entropy)
 
-	// CRITICAL FIX: Return sensible binary result for zero-contrast regions
+	// Return empty Mat for zero-contrast regions (let caller handle background)
 	if !hasContrast {
-		debugSystem.logger.Debug("creating uniform background for zero-contrast region")
-		result := gocv.NewMatWithSize(region.Rows(), region.Cols(), gocv.MatTypeCV8UC1)
-		backgroundScalar := gocv.NewScalar(0, 0, 0, 0) // All background (black)
-		result.SetTo(backgroundScalar)
-		return result
+		debugSystem.logger.Debug("returning empty result for zero-contrast region")
+		return gocv.NewMat()
 	}
 
 	// Level 1: Standard 2D Otsu for high-quality regions
