@@ -41,7 +41,10 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 		return pe.processSingleScaleAdaptive(src, params)
 	}
 
+	// CRITICAL FIX: Initialize result matrix to background (0)
 	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
+	backgroundScalar := gocv.NewScalar(0, 0, 0, 0) // Black = background for binary images
+	result.SetTo(backgroundScalar)
 
 	regionsProcessed := 0
 	regionErrors := 0
@@ -76,6 +79,7 @@ func (pe *ProcessingEngine) processRegionAdaptive(src gocv.Mat, params *OtsuPara
 					"error", err.Error())
 				srcRegion.Close()
 				regionsSkipped++
+				// Region remains initialized background (0) - no processing needed
 				continue
 			}
 
@@ -329,10 +333,12 @@ func (pe *ProcessingEngine) processOverlappingRegions(src gocv.Mat, params *Otsu
 	result := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV8UC1)
 	weights := gocv.NewMatWithSize(rows, cols, gocv.MatTypeCV32F)
 
-	// Initialize with zeros
-	zeros := gocv.NewScalar(0, 0, 0, 0)
-	result.SetTo(zeros)
-	weights.SetTo(zeros)
+	// CRITICAL FIX: Initialize matrices properly
+	backgroundScalar := gocv.NewScalar(0, 0, 0, 0) // Background pixels
+	zeroScalar := gocv.NewScalar(0, 0, 0, 0)       // Zero weights
+
+	result.SetTo(backgroundScalar)
+	weights.SetTo(zeroScalar)
 
 	defer result.Close()
 	defer weights.Close()
@@ -670,7 +676,7 @@ func (pe *ProcessingEngine) blendRegionWeighted(newRegion, regionWeight gocv.Mat
 	defer newWeights.Close()
 	gocv.Add(*targetWeights, regionWeight, &newWeights)
 
-	// Create threshold mask for avoiding division by zero
+	// Create threshold matrix for avoiding division by zero
 	thresholdMat := gocv.NewMatWithSize(newWeights.Rows(), newWeights.Cols(), gocv.MatTypeCV32F)
 	defer thresholdMat.Close()
 	thresholdScalar := gocv.NewScalar(1e-6, 0, 0, 0)
